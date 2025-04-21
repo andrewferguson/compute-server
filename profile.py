@@ -24,7 +24,7 @@ pc.defineParameter("machineNum", "Number of Machines",
                    portal.ParameterType.INTEGER, 1)
 pc.defineParameter("Hardware", "Machine Hardware",
                    portal.ParameterType.STRING,"d430",[("d430","d430"),("d710","d710"), ("d820", "d820"), ("pc3000", "pc3000"), ("d740", "d740"), ("d840", "d840")])
-pc.defineParameter("OS", "Operating System", portal.ParameterType.STRING)
+pc.defineParameter("OS", "Operating System", portal.ParameterType.STRING, "urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU20-64-STD")
 
 # Isolated CPU parameters
 pc.defineParameter("isolcpusNumber", "Number of Isolated CPUs",
