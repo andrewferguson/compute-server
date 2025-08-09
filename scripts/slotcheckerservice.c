@@ -34,6 +34,14 @@ typedef struct {
     int mapped;
 } Host;
 
+#define TYPE_PROXY 1
+#define TYPE_COMPONENT 2
+typedef struct __attribute__((__packed__)) slot_checker_ack {
+    uint8_t type;
+    uint32_t id;
+    uint8_t slot;
+} slot_checker_ack_t;
+
 int16_t slot = 2;
 
 // Function to create a new host mapper
@@ -166,9 +174,11 @@ void ReadFromSharedMem(Host *host, char *buffer, size_t buffer_size) {
 
 int send_to_switch(int client_fd, int num_to_send, struct sockaddr_in servaddr){
 
-//    printf("Sending %d\n", slot);
-    uint8_t buffer[]={(uint8_t)num_to_send, (uint8_t)slot};
-    sendto(client_fd, buffer, sizeof(buffer), MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr));
+    slot_checker_ack_t ack;
+    ack.type = (uint8_t) TYPE_COMPONENT;
+    ack.id = (uint32_t) num_to_send;
+    ack.slot = (uint8_t) slot;
+    sendto(client_fd, &ack, sizeof(ack), MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr));
 
 }
 
