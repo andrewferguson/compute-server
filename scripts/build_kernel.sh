@@ -210,7 +210,7 @@ if [ -f "/local/.tsc_done" ] && [ ! -f "/local/.vm_setup_done" ]; then
     # 4. Create VM (uvt-kvm, DHCP 模式即可)
     if ! sudo uvt-kvm create "${VM_NAME}" \
             release=focal arch=amd64 \
-            --cpu 54 --memory 54096 --password 1997 --disk 200; then
+            --cpu 52 --memory 54096 --password 1997 --disk 200; then
         echo "❌ uvt-kvm create failed, aborting"; exit 1
     fi
 
@@ -246,6 +246,89 @@ if [ -f "/local/.tsc_done" ] && [ ! -f "/local/.vm_setup_done" ]; then
           <timer name='hpet' present='no'/>\\
           <timer name='kvmclock' present='yes'/>\\
         </clock>" "$TMP_XML"
+
+        step_log "pinning cpu"
+        # Ensure <vcpu> = 54 and placement='static'
+if grep -q "<vcpu" "$TMP_XML"; then
+  sudo sed -i -E "s|<vcpu[^>]*>[^<]+</vcpu>|<vcpu placement='static'>52</vcpu>|" "$TMP_XML"
+else
+  sudo sed -i "/<\/clock>/a \    <vcpu placement='static'>54</vcpu>" "$TMP_XML"
+fi
+
+# Ensure <iothreads> = 1 (create if missing, right after <vcpu>)
+if grep -q "<iothreads>" "$TMP_XML"; then
+  sudo sed -i -E "s|<iothreads>[^<]+</iothreads>|<iothreads>1</iothreads>|" "$TMP_XML"
+else
+  sudo sed -i "/<vcpu placement='static'>52<\/vcpu>/a \    <iothreads>1</iothreads>" "$TMP_XML"
+fi
+
+# Remove any existing <cputune> block
+sudo sed -i '/<cputune>/,/<\/cputune>/d' "$TMP_XML"
+
+# Insert new <cputune> after <iothreads>
+sudo sed -i "/<iothreads>1<\/iothreads>/a \
+  <cputune>\\
+    <!-- Pin vCPUs 0..53 to host CPUs 2..55 -->\\
+    <vcpupin vcpu='0'  cpuset='2'/>\\
+    <vcpupin vcpu='1'  cpuset='3'/>\\
+    <vcpupin vcpu='2'  cpuset='4'/>\\
+    <vcpupin vcpu='3'  cpuset='5'/>\\
+    <vcpupin vcpu='4'  cpuset='6'/>\\
+    <vcpupin vcpu='5'  cpuset='7'/>\\
+    <vcpupin vcpu='6'  cpuset='8'/>\\
+    <vcpupin vcpu='7'  cpuset='9'/>\\
+    <vcpupin vcpu='8'  cpuset='10'/>\\
+    <vcpupin vcpu='9'  cpuset='11'/>\\
+    <vcpupin vcpu='10' cpuset='12'/>\\
+    <vcpupin vcpu='11' cpuset='13'/>\\
+    <vcpupin vcpu='12' cpuset='14'/>\\
+    <vcpupin vcpu='13' cpuset='15'/>\\
+    <vcpupin vcpu='14' cpuset='16'/>\\
+    <vcpupin vcpu='15' cpuset='17'/>\\
+    <vcpupin vcpu='16' cpuset='18'/>\\
+    <vcpupin vcpu='17' cpuset='19'/>\\
+    <vcpupin vcpu='18' cpuset='20'/>\\
+    <vcpupin vcpu='19' cpuset='21'/>\\
+    <vcpupin vcpu='20' cpuset='22'/>\\
+    <vcpupin vcpu='21' cpuset='23'/>\\
+    <vcpupin vcpu='22' cpuset='24'/>\\
+    <vcpupin vcpu='23' cpuset='25'/>\\
+    <vcpupin vcpu='24' cpuset='26'/>\\
+    <vcpupin vcpu='25' cpuset='27'/>\\
+    <vcpupin vcpu='26' cpuset='28'/>\\
+    <vcpupin vcpu='27' cpuset='29'/>\\
+    <vcpupin vcpu='28' cpuset='30'/>\\
+    <vcpupin vcpu='29' cpuset='31'/>\\
+    <vcpupin vcpu='30' cpuset='32'/>\\
+    <vcpupin vcpu='31' cpuset='33'/>\\
+    <vcpupin vcpu='32' cpuset='34'/>\\
+    <vcpupin vcpu='33' cpuset='35'/>\\
+    <vcpupin vcpu='34' cpuset='36'/>\\
+    <vcpupin vcpu='35' cpuset='37'/>\\
+    <vcpupin vcpu='36' cpuset='38'/>\\
+    <vcpupin vcpu='37' cpuset='39'/>\\
+    <vcpupin vcpu='38' cpuset='40'/>\\
+    <vcpupin vcpu='39' cpuset='41'/>\\
+    <vcpupin vcpu='40' cpuset='42'/>\\
+    <vcpupin vcpu='41' cpuset='43'/>\\
+    <vcpupin vcpu='42' cpuset='44'/>\\
+    <vcpupin vcpu='43' cpuset='45'/>\\
+    <vcpupin vcpu='44' cpuset='46'/>\\
+    <vcpupin vcpu='45' cpuset='47'/>\\
+    <vcpupin vcpu='46' cpuset='48'/>\\
+    <vcpupin vcpu='47' cpuset='49'/>\\
+    <vcpupin vcpu='48' cpuset='50'/>\\
+    <vcpupin vcpu='49' cpuset='51'/>\\
+    <vcpupin vcpu='50' cpuset='52'/>\\
+    <vcpupin vcpu='51' cpuset='53'/>\\
+    <!-- Keep emulator and IO thread on housekeeping CPUs 0 and 1 -->\\
+    <emulatorpin cpuset='54'/>\\
+    <iothreadpin iothread='1' cpuset='55'/>\\
+    <!-- Optional RT sched: uncomment only if you've configured RT limits system-wide
+    <vcpusched scheduler='fifo' priority='1' vcpus='0-51'/>\\
+    <iothreadsched scheduler='fifo' priority='1' iothreads='1'/>\\
+    -->\\
+  </cputune>" "$TMP_XML"
 
             step_log "Replacing $VM_NAME.xml with modified version and redefining domain"
             sudo mv "$TMP_XML" "$VM_XML"
