@@ -218,120 +218,105 @@ if [ -f "/local/.tsc_done" ] && [ ! -f "/local/.vm_setup_done" ]; then
         echo "❌ uvt-kvm create failed, aborting"; exit 1
     fi
 
-step_log "Working on $VM_XML safely"
-VM_XML="/etc/libvirt/qemu/${VM_NAME}.xml"
-TMP_XML="/tmp/${VM_NAME}.xml.modified"
+     step_log "Modifying /etc/libvirt/qemu/$VM_NAME.xml to patch CPU and clock settings"
+            VM_XML="/etc/libvirt/qemu/${VM_NAME}.xml"
+            TMP_XML="/tmp/${VM_NAME}.xml.modified"
 
-sudo cp "$VM_XML" "$VM_XML.bak"
-sudo cp "$VM_XML" "$TMP_XML"
+            sudo cp "$VM_XML" "$VM_XML.bak"
 
-# Remove any existing CPU/CLOCK/CPUTUNE/cores so we don't duplicate or leave strays
-sudo sed -i \
-  -e '/<cpu[^>]*>/,/<\/cpu>/d' \
-  -e '/<clock[^>]*>/,/<\/clock>/d' \
-  -e '/<cputune>/,/<\/cputune>/d' \
-  -e '/<vcpu[^>]*>[^<]*<\/vcpu>/d' \
-  -e '/<iothreads>[^<]*<\/iothreads>/d' \
-  "$TMP_XML"
+            step_log "Deleting two lines after </features>"
+            sudo awk '
+            /<\/features>/ {
+                print;
+                skip = 2;
+                next;
+            }
+            skip > 0 {
+                skip--;
+                next;
+            }
+            { print }
+            ' "$VM_XML" > "$TMP_XML"
 
-# Build the block we want to insert
-read -r -d '' INSERT_BLOCK <<'EOF'
-   <cpu mode='host-passthrough' check='none'>
-    <feature policy='disable' name='rdtscp'/>
-    <feature policy='disable' name='tsc-deadline'/>
-  </cpu>
-  <clock offset='localtime'>
-    <timer name='rtc' present='no' tickpolicy='delay'/>
-    <timer name='pit' present='no' tickpolicy='discard'/>
-    <timer name='hpet' present='no'/>
-    <timer name='kvmclock' present='yes'/>
-  </clock>
-  <vcpu placement='static'>54</vcpu>
-  <iothreads>1</iothreads>
-  <cputune>
-    <!-- Pin vCPUs 0..53 to host CPUs 2..55 -->
-    <vcpupin vcpu='0'  cpuset='2'/>
-    <vcpupin vcpu='1'  cpuset='3'/>
-    <vcpupin vcpu='2'  cpuset='4'/>
-    <vcpupin vcpu='3'  cpuset='5'/>
-    <vcpupin vcpu='4'  cpuset='6'/>
-    <vcpupin vcpu='5'  cpuset='7'/>
-    <vcpupin vcpu='6'  cpuset='8'/>
-    <vcpupin vcpu='7'  cpuset='9'/>
-    <vcpupin vcpu='8'  cpuset='10'/>
-    <vcpupin vcpu='9'  cpuset='11'/>
-    <vcpupin vcpu='10' cpuset='12'/>
-    <vcpupin vcpu='11' cpuset='13'/>
-    <vcpupin vcpu='12' cpuset='14'/>
-    <vcpupin vcpu='13' cpuset='15'/>
-    <vcpupin vcpu='14' cpuset='16'/>
-    <vcpupin vcpu='15' cpuset='17'/>
-    <vcpupin vcpu='16' cpuset='18'/>
-    <vcpupin vcpu='17' cpuset='19'/>
-    <vcpupin vcpu='18' cpuset='20'/>
-    <vcpupin vcpu='19' cpuset='21'/>
-    <vcpupin vcpu='20' cpuset='22'/>
-    <vcpupin vcpu='21' cpuset='23'/>
-    <vcpupin vcpu='22' cpuset='24'/>
-    <vcpupin vcpu='23' cpuset='25'/>
-    <vcpupin vcpu='24' cpuset='26'/>
-    <vcpupin vcpu='25' cpuset='27'/>
-    <vcpupin vcpu='26' cpuset='28'/>
-    <vcpupin vcpu='27' cpuset='29'/>
-    <vcpupin vcpu='28' cpuset='30'/>
-    <vcpupin vcpu='29' cpuset='31'/>
-    <vcpupin vcpu='30' cpuset='32'/>
-    <vcpupin vcpu='31' cpuset='33'/>
-    <vcpupin vcpu='32' cpuset='34'/>
-    <vcpupin vcpu='33' cpuset='35'/>
-    <vcpupin vcpu='34' cpuset='36'/>
-    <vcpupin vcpu='35' cpuset='37'/>
-    <vcpupin vcpu='36' cpuset='38'/>
-    <vcpupin vcpu='37' cpuset='39'/>
-    <vcpupin vcpu='38' cpuset='40'/>
-    <vcpupin vcpu='39' cpuset='41'/>
-    <vcpupin vcpu='40' cpuset='42'/>
-    <vcpupin vcpu='41' cpuset='43'/>
-    <vcpupin vcpu='42' cpuset='44'/>
-    <vcpupin vcpu='43' cpuset='45'/>
-    <vcpupin vcpu='44' cpuset='46'/>
-    <vcpupin vcpu='45' cpuset='47'/>
-    <vcpupin vcpu='46' cpuset='48'/>
-    <vcpupin vcpu='47' cpuset='49'/>
-    <vcpupin vcpu='48' cpuset='50'/>
-    <vcpupin vcpu='49' cpuset='51'/>
-    <vcpupin vcpu='50' cpuset='52'/>
-    <vcpupin vcpu='51' cpuset='53'/>
-    <vcpupin vcpu='52' cpuset='54'/>
-    <vcpupin vcpu='53' cpuset='55'/>
-    <!-- Keep emulator/IO thread on housekeeping CPUs -->
-    <emulatorpin cpuset='0'/>
-    <iothreadpin iothread='1' cpuset='1'/>
-    <!-- Optional RT sched (enable only if system is configured for it)
-    <vcpusched scheduler='fifo' priority='1' vcpus='0-53'/>
-    <iothreadsched scheduler='fifo' priority='1' iothreads='1'/>
-    -->
-  </cputune>
-EOF
+            step_log "Inserting new <cpu> and <clock> blocks"
+            sudo sed -i "/<\/features>/a \
+        <cpu mode='host-passthrough' check='none'>\\
+          <feature policy='disable' name='rdtscp'/>\\
+          <feature policy='disable' name='tsc-deadline'/>\\
+        </cpu>\\
+        <clock offset='localtime'>\\
+          <timer name='rtc' present='no' tickpolicy='delay'/>\\
+          <timer name='pit' present='no' tickpolicy='discard'/>\\
+          <timer name='hpet' present='no'/>\\
+          <timer name='kvmclock' present='yes'/>\\
+        </clock>" "$TMP_XML"
 
-# Insert after </features>. If <features> is missing, fall back to after </os>.
-if grep -q "</features>" "$TMP_XML"; then
-  sudo awk -v insert="$INSERT_BLOCK" '
-    /<\/features>/ { print; print insert; next } { print }' \
-    "$TMP_XML" > "$TMP_XML.new"
-else
-  sudo awk -v insert="$INSERT_BLOCK" '
-    /<\/os>/ { print; print insert; next } { print }' \
-    "$TMP_XML" > "$TMP_XML.new"
-fi
-sudo mv "$TMP_XML.new" "$TMP_XML"
+        step_log "pinning cpu"
+        # Ensure <vcpu> = 54 and placement='static'
 
-# (Optional) quick sanity check before define
-# sudo xmllint --noout "$TMP_XML" || { echo "XML invalid"; exit 1; }
+# Insert new <cputune> after <iothreads>
+sudo sed -i "/<vcpu placement='static'>52</vcpu>/a \
+  <cputune>\\
+    <vcpupin vcpu='0'  cpuset='2'/>\\
+    <vcpupin vcpu='1'  cpuset='3'/>\\
+    <vcpupin vcpu='2'  cpuset='4'/>\\
+    <vcpupin vcpu='3'  cpuset='5'/>\\
+    <vcpupin vcpu='4'  cpuset='6'/>\\
+    <vcpupin vcpu='5'  cpuset='7'/>\\
+    <vcpupin vcpu='6'  cpuset='8'/>\\
+    <vcpupin vcpu='7'  cpuset='9'/>\\
+    <vcpupin vcpu='8'  cpuset='10'/>\\
+    <vcpupin vcpu='9'  cpuset='11'/>\\
+    <vcpupin vcpu='10' cpuset='12'/>\\
+    <vcpupin vcpu='11' cpuset='13'/>\\
+    <vcpupin vcpu='12' cpuset='14'/>\\
+    <vcpupin vcpu='13' cpuset='15'/>\\
+    <vcpupin vcpu='14' cpuset='16'/>\\
+    <vcpupin vcpu='15' cpuset='17'/>\\
+    <vcpupin vcpu='16' cpuset='18'/>\\
+    <vcpupin vcpu='17' cpuset='19'/>\\
+    <vcpupin vcpu='18' cpuset='20'/>\\
+    <vcpupin vcpu='19' cpuset='21'/>\\
+    <vcpupin vcpu='20' cpuset='22'/>\\
+    <vcpupin vcpu='21' cpuset='23'/>\\
+    <vcpupin vcpu='22' cpuset='24'/>\\
+    <vcpupin vcpu='23' cpuset='25'/>\\
+    <vcpupin vcpu='24' cpuset='26'/>\\
+    <vcpupin vcpu='25' cpuset='27'/>\\
+    <vcpupin vcpu='26' cpuset='28'/>\\
+    <vcpupin vcpu='27' cpuset='29'/>\\
+    <vcpupin vcpu='28' cpuset='30'/>\\
+    <vcpupin vcpu='29' cpuset='31'/>\\
+    <vcpupin vcpu='30' cpuset='32'/>\\
+    <vcpupin vcpu='31' cpuset='33'/>\\
+    <vcpupin vcpu='32' cpuset='34'/>\\
+    <vcpupin vcpu='33' cpuset='35'/>\\
+    <vcpupin vcpu='34' cpuset='36'/>\\
+    <vcpupin vcpu='35' cpuset='37'/>\\
+    <vcpupin vcpu='36' cpuset='38'/>\\
+    <vcpupin vcpu='37' cpuset='39'/>\\
+    <vcpupin vcpu='38' cpuset='40'/>\\
+    <vcpupin vcpu='39' cpuset='41'/>\\
+    <vcpupin vcpu='40' cpuset='42'/>\\
+    <vcpupin vcpu='41' cpuset='43'/>\\
+    <vcpupin vcpu='42' cpuset='44'/>\\
+    <vcpupin vcpu='43' cpuset='45'/>\\
+    <vcpupin vcpu='44' cpuset='46'/>\\
+    <vcpupin vcpu='45' cpuset='47'/>\\
+    <vcpupin vcpu='46' cpuset='48'/>\\
+    <vcpupin vcpu='47' cpuset='49'/>\\
+    <vcpupin vcpu='48' cpuset='50'/>\\
+    <vcpupin vcpu='49' cpuset='51'/>\\
+    <vcpupin vcpu='50' cpuset='52'/>\\
+    <vcpupin vcpu='51' cpuset='53'/>\\
+  </cputune>" "$TMP_XML"
 
-step_log "Redefining domain"
-sudo mv "$TMP_XML" "$VM_XML"
-sudo virsh define "$VM_XML"
+            step_log "Replacing $VM_NAME.xml with modified version and redefining domain"
+            sudo mv "$TMP_XML" "$VM_XML"
+            sudo virsh define "$VM_XML"
+
+            sudo virsh destroy "$VM_NAME"
+            sudo virsh start "$VM_NAME"
 
 
     # --------------------------------------------------------------------- #
