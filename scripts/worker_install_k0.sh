@@ -8,7 +8,7 @@ source /tmp/common_k0.sh
 install_deps
 install_k0s
 
-remote="ubuntu@192.168.10.2:~/token-file"
+remote="ubuntu@192.168.100.2:~/token-file"
 target="/home/ubuntu/token-file"         # where we want it locally
 delay=5                           # seconds to wait between tries
 
