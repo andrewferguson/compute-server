@@ -28,7 +28,7 @@ done
 # ---- build blocks -----------------------------------------------------------
 ip_block=$(
   for ((i=0; i<machine_count; i++)); do
-    printf '192.168.%d.2\n' $((10 + i))
+    printf '192.168.%d.2\n' $((100 + i))
   done
 )
 
