@@ -466,9 +466,9 @@ if [ -f "/local/.vm_setup_done" ] && [ -f "/local/.net_setup_done" ] && [ ! -f "
         # Worker VM
         ssh  $SSH_OPTS ubuntu@${INTERNAL_IP} "sudo apt -y update && sudo apt -y install sshpass"
 
-        ssh  $SSH_OPTS ubuntu@${INTERNAL_IP} "sshpass -p 1997 ssh-copy-id $SSH_OPTS ubuntu@192.168.10.2"
+        ssh  $SSH_OPTS ubuntu@${INTERNAL_IP} "sshpass -p 1997 ssh-copy-id $SSH_OPTS ubuntu@192.168.100.2"
         ROLE_SCRIPT="/tmp/worker_install_k0.sh"
-        CONTROLLER_VM_IP="192.168.10.2"   # internal IP of the controller VM
+        CONTROLLER_VM_IP="192.168.100.2"   # internal IP of the controller VM
         ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "bash $ROLE_SCRIPT $CONTROLLER_VM_IP"
     fi
     sudo gcc -pthread slotcheckerservice.c -o slotcheckerservice
