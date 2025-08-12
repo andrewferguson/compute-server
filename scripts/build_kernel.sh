@@ -251,7 +251,7 @@ if [ -f "/local/.tsc_done" ] && [ ! -f "/local/.vm_setup_done" ]; then
           <timer name='kvmclock' present='yes'/>\\
         </clock>" "$TMP_XML"
 
-        step_log "pinning cpu"
+step_log "pinning cpu"
         # Ensure <vcpu> = 54 and placement='static'
 
 # Insert new <cputune> after <iothreads>
@@ -325,7 +325,7 @@ sudo sed -i "/<vcpu placement='static'>52</vcpu>/a \
         step_log "Waiting domifaddr for ${VM_NAME}"
         for i in {1..30}; do
             domif=$(sudo virsh domifaddr "$VM_NAME" 2>&1)
-            if echo "$domif" | grep -q 'ipv4'; then
+            if echo "$domif" | sudo grep -q 'ipv4'; then
                 break
             fi
             sleep 2
