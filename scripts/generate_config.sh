@@ -27,7 +27,7 @@ outfile=${2:-nodes.json}    # destination file
 
 for node in $(seq 1  $((nodes))); do
   left_net=$node
-  right_net=$(( node + 9 ))
+  right_net=$(( node + 99 ))
 
   # open this node’s object
   printf 'node%d: {' "$((node-1))" >> "$outfile"
