@@ -46,9 +46,6 @@ RANGE_START="192.168.${INTERNAL_SUBNET}.2"
 RANGE_END="192.168.${INTERNAL_SUBNET}.254"
 EXPOSED_IP="192.168.1.$((1 + INSTANCE_ID))"         # e.g. 1,2,3
 
-touch /local/.kernel_done
-
-touch /local/.tsc_done
 ################################################################################
 # Step 1: Kernel Build
 ################################################################################
@@ -214,7 +211,7 @@ if [ -f "/local/.tsc_done" ] && [ ! -f "/local/.vm_setup_done" ]; then
     # 4. Create VM (uvt-kvm, DHCP 模式即可)
     if ! sudo uvt-kvm create "${VM_NAME}" \
             release=focal arch=amd64 \
-            --cpu 52 --memory 54096 --password 1997 --disk 200; then
+            --cpu 51 --memory 54096 --password 1997 --disk 200; then
         echo "❌ uvt-kvm create failed, aborting"; exit 1
     fi
 
@@ -254,15 +251,20 @@ if [ -f "/local/.tsc_done" ] && [ ! -f "/local/.vm_setup_done" ]; then
 step_log "pinning cpu"
         # Ensure <vcpu> = 54 and placement='static'
 block=$(
+  echo "  <iothreads>1</iothreads>"
   echo "  <cputune>"
-  for i in $(seq 0 51); do
+  for i in $(seq 0 50); do
     printf "    <vcpupin vcpu='%d' cpuset='%d'/>\n" "$i" "$((i+2))"
   done
+  echo "    <emulatorpin cpuset='53'/>"
+  echo "    <iothreadpin iothread='1' cpuset='54'/>"
+  echo "    <vcpusched vcpus='0'    scheduler='fifo' priority='1'/>"
+  echo "    <vcpusched vcpus='1-50' scheduler='fifo' priority='1'/>"
+  echo "    <emulatorsched scheduler='fifo' priority='1'/>"
+  echo "    <iothreadsched iothreads='1' scheduler='fifo' priority='1'/>"
   echo "  </cputune>"
 )
-
-sudo sed -i "/<vcpu placement='static'>52<\/vcpu>/r /dev/stdin" "$TMP_XML" <<<"$block"
-
+sudo sed -i "/<vcpu placement='static'>51<\/vcpu>/r /dev/stdin" "$TMP_XML" <<<"$block"
 
             step_log "Replacing $VM_NAME.xml with modified version and redefining domain"
             sudo mv "$TMP_XML" "$VM_XML"
