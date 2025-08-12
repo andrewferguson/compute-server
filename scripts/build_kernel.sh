@@ -45,6 +45,10 @@ NET_GW_IP="192.168.${INTERNAL_SUBNET}.1"
 RANGE_START="192.168.${INTERNAL_SUBNET}.2"
 RANGE_END="192.168.${INTERNAL_SUBNET}.254"
 EXPOSED_IP="192.168.1.$((1 + INSTANCE_ID))"         # e.g. 1,2,3
+
+touch /local/.kernel_done
+
+touch /local/.tsc_done
 ################################################################################
 # Step 1: Kernel Build
 ################################################################################
@@ -84,7 +88,7 @@ if [ ! -f "/local/.kernel_done" ]; then
     step_log "Updating grub"
     sudo update-grub
 
-
+    
     ################################################################################
     # Step 1.5: Configure tuned for core isolation (core 2–55)
     ################################################################################
