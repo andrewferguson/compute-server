@@ -259,7 +259,7 @@ for i in range(0,params.machineNum):
     i)                      # $4 = instance indexAdd commentMore actions
     node.addService(PG.Execute(shell="bash", command=command))
     node.addService(PG.Execute(shell="bash", command=command))
-    node.hardware_type = "c6620"
+    node.hardware_type = params.hardware
     iface = node.addInterface()
     iface.addAddress(PG.IPv4Address("10.1."+str(i+1+k8s_ip)+".1", netmask))
     network.addInterface(iface)
