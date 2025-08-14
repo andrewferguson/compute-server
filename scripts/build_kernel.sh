@@ -212,7 +212,7 @@ if [ -f "/local/.tsc_done" ] && [ ! -f "/local/.vm_setup_done" ]; then
     # 4. Create VM (uvt-kvm, DHCP 模式即可)
     if ! sudo uvt-kvm create "${VM_NAME}" \
             release=focal arch=amd64 \
-            --cpu 51 --memory 54096 --password 1997 --disk 200; then
+            --cpu 23 --memory 54096 --password 1997 --disk 200; then
         echo "❌ uvt-kvm create failed, aborting"; exit 1
     fi
 
@@ -254,13 +254,13 @@ step_log "pinning cpu"
 block=$(
   echo "  <iothreads>1</iothreads>"
   echo "  <cputune>"
-  for i in $(seq 0 50); do
+  for i in $(seq 0 22); do
     printf "    <vcpupin vcpu='%d' cpuset='%d'/>\n" "$i" "$((i+2))"
   done
-  echo "    <emulatorpin cpuset='53'/>"
-  echo "    <iothreadpin iothread='1' cpuset='54'/>"
+  echo "    <emulatorpin cpuset='23'/>"
+  echo "    <iothreadpin iothread='1' cpuset='24'/>"
   echo "    <vcpusched vcpus='0'    scheduler='fifo' priority='1'/>"
-  echo "    <vcpusched vcpus='1-50' scheduler='fifo' priority='1'/>"
+  echo "    <vcpusched vcpus='1-22' scheduler='fifo' priority='1'/>"
   echo "    <emulatorsched scheduler='fifo' priority='1'/>"
   echo "    <iothreadsched iothreads='1' scheduler='fifo' priority='1'/>"
   echo "  </cputune>"
