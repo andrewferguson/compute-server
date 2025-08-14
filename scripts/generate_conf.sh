@@ -28,13 +28,13 @@ done
 # ---- build blocks -----------------------------------------------------------
 ip_block=$(
   for ((i=0; i<machine_count; i++)); do
-    printf '192.168.%d.2\n' $((100 + i))
+    printf '10.2.%d.2\n' $((1 + i))
   done
 )
 
 component_block=$(
   for ((i=1; i<=machine_count; i++)); do
-    printf '192.168.%d.1\n' "$i"
+    printf '10.1.%d.1\n' "$i"
   done
 )
 

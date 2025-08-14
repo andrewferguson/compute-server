@@ -194,7 +194,7 @@ rspec.addTour(tour)
 
 
 # Network
-netmask="255.255.0.0"
+netmask="255.0.0.0"
 network = rspec.Link("Network")
 network.link_multiplexing = True
 network.vlan_tagging = True
@@ -203,7 +203,7 @@ network.best_effort = True
 if params.OS == 'ubuntu20':
     os = 'urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU20-64-STD'
 elif params.OS == 'ubuntu22':
-    os = 'urn:publicid:IDN+emulab.net+image+emulab-ops//UBUNTU22-64-BETA'
+    os = 'urn:publicid:IDN+emulab.net+image+emulab-ops//UBUNTU22-64-STD'
 else:
     os = 'urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU18-64-STD'
 
@@ -219,7 +219,7 @@ if params.k8s == True:
     master.routable_control_ip = True
     master.disk_image = os
     iface = master.addInterface()
-    iface.addAddress(PG.IPv4Address("192.168.1.1", netmask))
+    iface.addAddress(PG.IPv4Address("10.1.0.0", netmask))
     network.addInterface(iface)
     master.addService(PG.Execute(shell="bash", command="/local/repository/scripts/master.sh"))
     k8s_ip = 1
@@ -261,18 +261,18 @@ for i in range(0,params.machineNum):
     node.addService(PG.Execute(shell="bash", command=command))
     node.hardware_type = "c6620"
     iface = node.addInterface()
-    iface.addAddress(PG.IPv4Address("192.168."+str(i+1+k8s_ip)+".1", netmask))
+    iface.addAddress(PG.IPv4Address("10.1."+str(i+1+k8s_ip)+".1", netmask))
     network.addInterface(iface)
 
 count += 1
-node = rspec.RawPC("Proxy")
+node = rspec.RawPC("Global Proxy")
 node.disk_image = os
 node.addService(PG.Execute(shell="bash", command=profileConfigs + "/local/repository/scripts/configure.sh"))
 command="/local/repository/scripts/build_proxy.sh {} {} {}".format(params.token, params.machineNum, params.githubUser)
 node.addService(PG.Execute(shell="bash", command=command))
 node.hardware_type = params.ProxyHardware
 iface = node.addInterface()
-iface.addAddress(PG.IPv4Address("192.168.250.1", netmask))
+iface.addAddress(PG.IPv4Address("10.4.1.1", netmask))
 network.addInterface(iface)
 
 for idx, dense_radio in enumerate(params.dense_radios):

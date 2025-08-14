@@ -27,14 +27,14 @@ outfile=${2:-nodes.json}    # destination file
 
 for node in $(seq 1  $((nodes))); do
   left_net=$node
-  right_net=$(( node + 99 ))
+  right_net=$(( node ))
 
   # open this node’s object
   printf 'node%d: {' "$((node-1))" >> "$outfile"
 
   for host in $(seq 2 254); do
-    left_ip="192.168.${left_net}.${host}"
-    right_ip="192.168.${right_net}.${host}"
+    left_ip="10.1.${left_net}.${host}"
+    right_ip="10.2.${right_net}.${host}"
     # print a "key":"value" pair
     printf '    "%s": "%s"' "$left_ip" "$right_ip" >> "$outfile"
     # comma between pairs except after .254

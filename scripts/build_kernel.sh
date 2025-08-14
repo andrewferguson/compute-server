@@ -39,17 +39,18 @@ kernel_link="https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/${kernel_repo
 qdt_link="https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/${kernel_repo}.git"
 tsc_link="https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/${tsc_repo}.git"
 VM_NAME="ins${INSTANCE_ID}vm"
-INTERNAL_SUBNET=$((100 + INSTANCE_ID)) # 122,123,124,…
-INTERNAL_IP="192.168.${INTERNAL_SUBNET}.2"
-NET_GW_IP="192.168.${INTERNAL_SUBNET}.1"
-RANGE_START="192.168.${INTERNAL_SUBNET}.2"
-RANGE_END="192.168.${INTERNAL_SUBNET}.254"
-EXPOSED_IP="192.168.1.$((1 + INSTANCE_ID))"         # e.g. 1,2,3
+INTERNAL_SUBNET=$((1 +INSTANCE_ID)) # 122,123,124,…
+INTERNAL_IP="10.2.${INTERNAL_SUBNET}.2"
+NET_GW_IP="10.2.${INTERNAL_SUBNET}.1"
+RANGE_START="10.2.${INTERNAL_SUBNET}.2"
+RANGE_END="10.2.${INTERNAL_SUBNET}.254"
 
 ################################################################################
 # Step 1: Kernel Build
 ################################################################################
-
+touch /local/.kernel_done
+touch /local/.rebooted
+touch /local/.tsc_done
 if [ ! -f "/local/.kernel_done" ]; then
     step_log "Installing kernel build dependencies"
     sudo apt-get update
@@ -305,7 +306,7 @@ sudo sed -i "/<vcpu placement='static'>51<\/vcpu>/r /dev/stdin" "$TMP_XML" <<<"$
       sudo sed -i -E "
         # -- bridge / gateway ----------------------------------------------------
         0,/<ip address=/{
-            s@<ip address='[0-9.]+' netmask='255\.255\.255\.0'>@<ip address='${NET_GW_IP}' netmask='255.255.255.0'>@
+            s@<ip address='[0-9.]+' netmask='255\.255\.0\.0'>@<ip address='${NET_GW_IP}' netmask='255.255.0.0'>@
         }
 
         # -- DHCP range ----------------------------------------------------------
@@ -485,9 +486,9 @@ if [ -f "/local/.vm_setup_done" ] && [ -f "/local/.net_setup_done" ] && [ ! -f "
         # Worker VM
         ssh  $SSH_OPTS ubuntu@${INTERNAL_IP} "sudo apt -y update && sudo apt -y install sshpass"
 
-        ssh  $SSH_OPTS ubuntu@${INTERNAL_IP} "sshpass -p 1997 ssh-copy-id $SSH_OPTS ubuntu@192.168.100.2"
+        ssh  $SSH_OPTS ubuntu@${INTERNAL_IP} "sshpass -p 1997 ssh-copy-id $SSH_OPTS ubuntu@10.2.1.2"
         ROLE_SCRIPT="/tmp/worker_install_k0.sh"
-        CONTROLLER_VM_IP="192.168.100.2"   # internal IP of the controller VM
+        CONTROLLER_VM_IP="10.2.1.2"   # internal IP of the controller VM
         ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "bash $ROLE_SCRIPT $CONTROLLER_VM_IP"
     fi
     sudo gcc -pthread slotcheckerservice.c -o slotcheckerservice

@@ -32,10 +32,10 @@ phobos_link="https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/${kernel_repo
 git clone --quiet "${phobos_link}" ~/phobos-proxy
 cd ~/phobos-proxy
 for (( i=0; i<NUM_MACHINE; i++ )); do
-  DEST_NET=$((100 + i))
+  DEST_NET=$((1 + i))
   GW_NET=$((1 + i))
-  echo "Adding route: 192.168.${DEST_NET}.2 via 192.168.${GW_NET}.1"
-  sudo ip route add 192.168."${DEST_NET}".2 via 192.168."${GW_NET}".1
+  echo "Adding route: 10.2.${DEST_NET}.2 via 10.1.${GW_NET}.1"
+  sudo ip route add 10.2."${DEST_NET}".2 via 10.1."${GW_NET}".1
 done
 make -j
 sudo cp /local/repository/scripts/generate_conf.sh ~/

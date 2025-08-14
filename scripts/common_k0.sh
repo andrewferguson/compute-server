@@ -30,7 +30,7 @@ install_k0s() {
 }
 
 wait_for_token() {         # $1 = controller_ip
-  local ctl_ip="192.168.100.2"; local token=""
+  local ctl_ip="10.2.1.2"; local token=""
   log "Waiting for join token from $ctl_ip ..."
   for _ in {1..30}; do
       token=$(ssh -oStrictHostKeyChecking=no ubuntu@"$ctl_ip" cat /home/ubuntu/token-file 2>/dev/null || true)

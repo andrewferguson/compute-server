@@ -8,7 +8,7 @@ source /tmp/common_k0.sh
 install_deps
 install_k0s
 
-remote="ubuntu@192.168.100.2:~/token-file"
+remote="ubuntu@10.2.1.2:~/token-file"
 target="/home/ubuntu/token-file"         # where we want it locally
 delay=5                           # seconds to wait between tries
 
@@ -20,7 +20,7 @@ for (( ; ; )); do
   }
 
   echo "Attempting to copy token-file..."
-  sshpass -p 1997 ssh-copy-id -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null ubuntu@192.168.100.2
+  sshpass -p 1997 ssh-copy-id -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null ubuntu@10.2.1.2
   scp  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$remote" "$target" && {
     echo "✓ Copy succeeded."
     break
