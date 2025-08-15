@@ -39,7 +39,7 @@ fi
 
 # Derive the gateway IP assuming it is the .1 of the subnet (e.g., 10.2.1.1)
 IFS='.' read -r o1 o2 o3 o4 <<< "$IP_ADDR"
-GATEWAY="$o1.$o2.$3.1"
+GATEWAY="10.2.$o3.1"
 
 # Destination route
 DEST="10.2.0.0/16"
