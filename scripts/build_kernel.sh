@@ -306,7 +306,7 @@ sudo sed -i "/<vcpu placement='static'>51<\/vcpu>/r /dev/stdin" "$TMP_XML" <<<"$
       sudo sed -i -E "
         # -- bridge / gateway ----------------------------------------------------
         0,/<ip address=/{
-            s@<ip address='[0-9.]+' netmask='255\.255\.0\.0'>@<ip address='${NET_GW_IP}' netmask='255.255.0.0'>@
+            s@<ip address='[0-9.]+' netmask='255\.255\.255\.0'>@<ip address='${NET_GW_IP}' netmask='255.255.0.0'>@
         }
 
         # -- DHCP range ----------------------------------------------------------
