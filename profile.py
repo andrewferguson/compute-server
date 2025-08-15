@@ -27,6 +27,8 @@ pc.defineParameter("machineNum", "Number of Machines",
                    portal.ParameterType.INTEGER, 1)
 pc.defineParameter("Hardware", "Machine Hardware",
                    portal.ParameterType.NODETYPE,"pc")
+pc.defineParameter("machinePNum", "Number of Split Prxoy Machines",
+                   portal.ParameterType.INTEGER, 1)
 pc.defineParameter("ProxyHardware", "Proxy Machine Hardware",
                    portal.ParameterType.NODETYPE,"pc")
 pc.defineParameter("OS", "Operating System",
@@ -274,6 +276,21 @@ node.hardware_type = params.ProxyHardware
 iface = node.addInterface()
 iface.addAddress(PG.IPv4Address("10.4.1.1", netmask))
 network.addInterface(iface)
+
+for i in range(0,params.machinePNum):
+    count += 1
+    node = rspec.RawPC("Pnode" + str(i))
+    node.disk_image = os
+    # node.hardware_type = params.Hardware
+    # node.component_manager_id = COMP_MANAGER_ID
+    node.addService(PG.Execute(shell="bash", command=profileConfigs + "/local/repository/scripts/configure.sh"))
+    command="/local/repository/scripts/build_proxy.sh {} {} {}".format(params.token, params.machineNum, params.githubUser)
+    node.addService(PG.Execute(shell="bash", command=command))
+    node.addService(PG.Execute(shell="bash", command=command))
+    node.hardware_type = params.ProxyHardware
+    iface = node.addInterface()
+    iface.addAddress(PG.IPv4Address("10.3."+str(i+1)+".1", netmask))
+    network.addInterface(iface)
 
 for idx, dense_radio in enumerate(params.dense_radios):
     node = rspec.RawPC("dense-{}".format(dense_radio.device.split("-")[-1]))
