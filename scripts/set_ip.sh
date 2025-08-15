@@ -38,6 +38,7 @@ while read -r line; do
 #            echo "sudo iptables -t nat -A PREROUTING -d $first_ip -j DNAT --to-destination $second_ip"
 #            echo "sudo iptables -t nat -A POSTROUTING -s $second_ip -j MASQUERADE"
             sudo iptables -t nat -A PREROUTING -d $first_ip -j DNAT --to-destination $second_ip
+            sudo iptables -t nat -A OUTPUT -d $first_ip -j DNAT --to-destination $second_ip
             sudo iptables -t nat -A POSTROUTING -s $second_ip -j MASQUERADE
         else
             # If the hostname does not match current_hostname, reverse the iptables command
@@ -45,6 +46,7 @@ while read -r line; do
 #            echo "sudo iptables -t nat -A PREROUTING -d $second_ip -j DNAT --to-destination $first_ip"
 #            echo "sudo iptables -t nat -A POSTROUTING -s $first_ip -j MASQUERADE"
             sudo iptables -t nat -A PREROUTING -d $second_ip -j DNAT --to-destination  $first_ip
+            sudo iptables -t nat -A OUTPUT -d $first_ip -j DNAT --to-destination $second_ip
             sudo iptables -t nat -A POSTROUTING -s $first_ip -j MASQUERADE
         fi
     done

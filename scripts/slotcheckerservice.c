@@ -334,7 +334,7 @@ int main(int argc, char *argv[]){
     // Filling server information
     servaddr.sin_family = AF_INET;
     servaddr.sin_port = htons(SERVER_PORT);
-    servaddr.sin_addr.s_addr = inet_addr("192.168.250.1");
+    servaddr.sin_addr.s_addr = inet_addr("10.4.1.1");
     int port = 4322;
     int from_switch_fd = bind_for_switch(port);
     int new_value = 1;
