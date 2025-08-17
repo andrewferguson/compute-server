@@ -284,8 +284,7 @@ for i in range(0,params.machinePNum):
     # node.hardware_type = params.Hardware
     # node.component_manager_id = COMP_MANAGER_ID
     node.addService(PG.Execute(shell="bash", command=profileConfigs + "/local/repository/scripts/configure.sh"))
-    command="/local/repository/scripts/build_proxy.sh {} {} {}".format(params.token, params.machineNum, params.githubUser)
-    node.addService(PG.Execute(shell="bash", command=command))
+    command="/local/repository/scripts/build_proxy.sh {} {} {} {}".format(params.token, params.machineNum, params.githubUser, i)
     node.addService(PG.Execute(shell="bash", command=command))
     node.hardware_type = params.ProxyHardware
     iface = node.addInterface()
