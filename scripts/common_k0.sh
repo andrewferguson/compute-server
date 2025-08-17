@@ -2,12 +2,16 @@
 # shellcheck disable=SC1091
 set -euo pipefail
 
+# Redirect stdout/stderr to file
+exec >> $LOG_FILE
+exec 2>&1
+
 LOG_DIR="/home/ubuntu"
 K0S_VERSION_CHANNEL="stable"
 K0S_BIN="/usr/local/bin/k0s"
 
-log()  { echo -e "[\e[34mINFO\e[0m] $*" | tee -a "$LOG_FILE"; }
-fail() { echo -e "[\e[31mFAIL\e[0m] $*" | tee -a "$LOG_FILE"; exit 1; }
+log()  { echo -e "[\e[34mINFO\e[0m] $*"; }
+fail() { echo -e "[\e[31mFAIL\e[0m] $*"; exit 1; }
 
 install_deps() {
   log "Installing prerequisites"
