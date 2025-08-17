@@ -60,7 +60,7 @@ gcc -o global_slotchecker src/sc_global.c
 # Add the interfaces for this proxy machine
 primary_if=$(ip -o -4 addr | awk '$4 ~ inet 10.3 {print $2; exit}')
 for i in $(seq 2 254); do
-  ip addr add "10.3.{PROXY_INSTANCE_ID}.${i}/24" dev "$primary_if"
+  sudo ip addr add "10.3.$((PROXY_INSTANCE_ID + 1)).${i}/24" dev "$primary_if"
 done
 
 sudo cp /local/repository/scripts/generate_conf.sh ~/
