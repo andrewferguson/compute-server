@@ -79,27 +79,23 @@ profileConfigs = ""
 count = 0
 for i in range(0,params.machineNum):
     count += 1
-    node = rspec.RawPC("node" + str(i))
+    node = rspec.RawPC(f"node{i}")
     node.disk_image = os
     node.addService(PG.Execute(shell="bash", command=profileConfigs + "/local/repository/scripts/configure.sh"))
 
-    command = "/local/repository/scripts/build_kernel.sh {} {} {} {}".format(
-    params.token,           # $1 = token
-    params.githubUser,      # $2 = GitHub username
-    params.machineNum,      # $3 = machine number
-    i)                      # $4 = instance indexAdd commentMore actions
+    command = f"/local/repository/scripts/build_kernel.sh {params.token} {params.githubUser} {params.machineNum} {i}"
     node.addService(PG.Execute(shell="bash", command=command))
     node.addService(PG.Execute(shell="bash", command=command))
     node.hardware_type = params.Hardware
     iface = node.addInterface()
-    iface.addAddress(PG.IPv4Address("10.1."+str(i+1+k8s_ip)+".1", netmask))
+    iface.addAddress(PG.IPv4Address(f"10.1.{i+1}.1", netmask))
     network.addInterface(iface)
 
 count += 1
 node = rspec.RawPC("Proxy")
 node.disk_image = os
 node.addService(PG.Execute(shell="bash", command=profileConfigs + "/local/repository/scripts/configure.sh"))
-command="/local/repository/scripts/build_proxy.sh {} {} {}".format(params.token, params.machineNum, params.githubUser)
+command=f"/local/repository/scripts/build_proxy.sh {params.token} {params.machineNum} {params.githubUser}"
 node.addService(PG.Execute(shell="bash", command=command))
 node.hardware_type = params.ProxyHardware
 iface = node.addInterface()
@@ -108,14 +104,14 @@ network.addInterface(iface)
 
 for i in range(0,params.machinePNum):
     count += 1
-    node = rspec.RawPC("Pnode" + str(i))
+    node = rspec.RawPC(f"Pnode{i}")
     node.disk_image = os
     node.addService(PG.Execute(shell="bash", command=profileConfigs + "/local/repository/scripts/configure.sh"))
-    command="/local/repository/scripts/build_proxy.sh {} {} {} {}".format(params.token, params.machineNum, params.githubUser, i)
+    command=f"/local/repository/scripts/build_proxy.sh {params.token} {params.machineNum} {params.githubUser} {i}"
     node.addService(PG.Execute(shell="bash", command=command))
     node.hardware_type = params.ProxyHardware
     iface = node.addInterface()
-    iface.addAddress(PG.IPv4Address("10.3."+str(i+1)+".1", netmask))
+    iface.addAddress(PG.IPv4Address(f"10.3.{i+1}.1", netmask))
     network.addInterface(iface)
 
 
