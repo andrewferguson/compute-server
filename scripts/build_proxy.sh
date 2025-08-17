@@ -30,8 +30,8 @@ sudo modprobe sctp
 for (( i=0; i<NUM_MACHINE; i++ )); do
   DEST_NET=$((1 + i))
   GW_NET=$((1 + i))
-  echo "Adding route: 10.2.${DEST_NET}.2 via 10.1.${GW_NET}.1"
-  sudo ip route add 10.2."${DEST_NET}".2 via 10.1."${GW_NET}".1
+  echo "Adding route: 10.2.${DEST_NET}.0/24 via 10.1.${GW_NET}.1"
+  sudo ip route add 10.2."${DEST_NET}".0/24 via 10.1."${GW_NET}".1
 done
 
 # 4G
