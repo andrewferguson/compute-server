@@ -47,7 +47,7 @@ cd ~/
 # 5G
 repo="ujjwalpawar/phobos-5g"
 git_url="https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/${repo}.git"
-git clone --quiet "${phobos_link}" ~/phobos-5g
+git clone --quiet "${git_url}" ~/phobos-5g
 cd ~/phobos-5g
 git checkout split
 make -j
