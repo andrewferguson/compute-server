@@ -21,10 +21,14 @@ function step_log() {
     fi
     echo ""
 }
-GITHUB_TOKEN="$1"
-NUM_OUTER_NODES="$2"
-GITHUB_USERNAME="$3"
-PROXY_INSTANCE_ID="$4"
+GITHUB_USERNAME="$1"
+GITHUB_TOKEN="$2"
+NUM_OUTER_NODES="$3"
+NUM_GNB_PER_NODE="$4"
+PROXY_NODE_ID="$5"
+NUM_PROXY_ON_THIS_NODE="$6"
+FIRST_PROXY_ID="$7"
+TOTAL_NUM_UE="$8"
 
 sudo apt update
 sudo apt-get install -yqq libsctp-dev lksctp-tools  zlib1g-dev
@@ -57,13 +61,33 @@ cd ~/
 cd ~/phobos-5g
 gcc -o global_slotchecker src/sc_global.c
 
-# Add the interfaces for this proxy machine
+# Get the interface for this proxy machine
 primary_if=$(ip -o -4 addr | awk '$4 ~ inet 10.3 {print $2; exit}')
-for i in $(seq 2 254); do
-  sudo ip addr add "10.3.$((PROXY_INSTANCE_ID + 1)).${i}/24" dev "$primary_if"
-done
 
-sudo cp /local/repository/scripts/generate_conf.sh ~/
-cd ~/
-sudo chmod +x generate_conf.sh
+mkdir ~/run_proxy
+mkdir ~/gnb_ids
+mkdir ~/gnb_ips
+
+counter=1
+for i in $(seq $FIRST_PROXY_ID $(($FIRST_PROXY_ID + $NUM_PROXY_ON_THIS_NODE - 1))); do
+  # Calculate the IP of the proxy instance and the gNB it connects to
+  PROXY_IP="10.3.$(($PROXY_NODE_ID + 1)).$counter"
+  GNB_IP="10.2.$(($i / $NUM_GNB_PER_NODE + 1)).$(($i % $NUM_GNB_PER_NODE + 2))"
+
+  # Add the IP address for the proxy instance
+  sudo ip addr add "$PROXY_IP/24" dev "$primary_if"
+
+  # Create the run script for the proxy instance
+  echo "#!/bin/bash" > "$HOME/run_proxy/$i.sh"
+  echo "$HOME/phobos-5g/build/proxy $TOTAL_NUM_UE --chronos5g $HOME/gnb_ips/$i $HOME/gnb_ids/$i $i $PROXY_IP 10.4.1.1" > "$HOME/run_proxy/$i.sh"
+  chmod +x "$HOME/run_proxy/$i.sh"
+
+  # Create the config files for the proxy instance
+  echo "$GNB_IP" > "$HOME/gnb_ips/$i"
+  echo "$i" > "$HOME/gnb_ids/$i"
+
+  # Log what has been done
+  echo "Proxy $i ($PROXY_IP), connecting to gNB $i ($GNB_IP), supporting $TOTAL_NUM_UE UEs"
+  ((counter++))
+done
 

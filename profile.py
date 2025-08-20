@@ -15,6 +15,7 @@ import geni.rspec.pg as PG
 import geni.rspec.igext as IG
 import geni.rspec.emulab.spectrum as spectrum
 import geni.rspec.emulab.pnext as pn
+import math
 
 
 pc = portal.Context()
@@ -23,16 +24,13 @@ rspec = PG.Request()
 COMP_MANAGER_ID = "urn:publicid:IDN+emulab.net+authority+cm"
 
 # Profile parameters.
-pc.defineParameter("machineNum", "Number of Machines",
-                   portal.ParameterType.INTEGER, 1)
-pc.defineParameter("Hardware", "Machine Hardware",
-                   portal.ParameterType.NODETYPE,"pc")
-pc.defineParameter("machinePNum", "Number of Split Prxoy Machines",
-                   portal.ParameterType.INTEGER, 1)
-pc.defineParameter("ProxyHardware", "Proxy Machine Hardware",
-                   portal.ParameterType.NODETYPE,"pc")
-pc.defineParameter("OS", "Operating System",
-                   portal.ParameterType.STRING,"ubuntu22",[("ubuntu18","ubuntu18"),("ubuntu20","ubuntu20"), ("ubuntu22", "ubuntu22")])
+pc.defineParameter("machineNum", "Number of gNB / UE Nodes", portal.ParameterType.INTEGER, 1)
+pc.defineParameter("numberGNB", "Number of gNB", portal.ParameterType.INTEGER, 1)
+pc.defineParameter("numberUE", "Number of UE", portal.ParameterType.INTEGER, 1)
+pc.defineParameter("proxyPerNode", "Number of Proxy per Node", portal.ParameterType.INTEGER, 1)
+pc.defineParameter("Hardware", "Outer Node Hardware", portal.ParameterType.NODETYPE,"pc")
+pc.defineParameter("ProxyHardware", "Proxy Machine Hardware", portal.ParameterType.NODETYPE,"pc")
+pc.defineParameter("OS", "Operating System", portal.ParameterType.STRING,"ubuntu22",[("ubuntu18","ubuntu18"),("ubuntu20","ubuntu20"), ("ubuntu22", "ubuntu22")])
 
 #GitHub parameters
 pc.defineParameter("githubUser","GitHub Username",
@@ -76,9 +74,7 @@ else:
 profileConfigs = ""
 
 # Machines
-count = 0
 for i in range(0,params.machineNum):
-    count += 1
     node = rspec.RawPC("node" + str(i))
     node.disk_image = os
     node.addService(PG.Execute(shell="bash", command=profileConfigs + "/local/repository/scripts/configure.sh"))
@@ -95,28 +91,31 @@ for i in range(0,params.machineNum):
     iface.addAddress(PG.IPv4Address("10.1."+str(i+1)+".1", netmask))
     network.addInterface(iface)
 
-count += 1
-node = rspec.RawPC("Proxy")
+node = rspec.RawPC("GlobalSC")
 node.disk_image = os
 node.addService(PG.Execute(shell="bash", command=profileConfigs + "/local/repository/scripts/configure.sh"))
 command="/local/repository/scripts/build_proxy.sh {} {} {}".format(params.token, params.machineNum, params.githubUser)
-node.addService(PG.Execute(shell="bash", command=command))
+#node.addService(PG.Execute(shell="bash", command=command)) # comment out while we debug / improve the proxy script
 node.hardware_type = params.ProxyHardware
 iface = node.addInterface()
 iface.addAddress(PG.IPv4Address("10.4.1.1", netmask))
 network.addInterface(iface)
 
-for i in range(0,params.machinePNum):
-    count += 1
-    node = rspec.RawPC("Pnode" + str(i))
+current_proxy_id = 0
+machinePNum = int(math.ceil(params.numberGNB / params.proxyPerNode))
+gNBPerNode = int(math.ceil(params.numberGNB / params.machineNum))
+for i in range(0,machinePNum):
+    node = rspec.RawPC("Proxy" + str(i))
     node.disk_image = os
+    num_proxy_on_this_node = params.numberGNB - current_proxy_id if current_proxy_id + params.proxyPerNode + 1 > params.numberGNB else params.proxyPerNode
     node.addService(PG.Execute(shell="bash", command=profileConfigs + "/local/repository/scripts/configure.sh"))
-    command="/local/repository/scripts/build_proxy.sh {} {} {} {}".format(params.token, params.machineNum, params.githubUser, i)
+    command="/local/repository/scripts/build_proxy.sh {} {} {} {} {} {} {} {}".format(params.githubUser, params.token, params.machineNum, gNBPerNode, i, num_proxy_on_this_node, current_proxy_id, params.numberUE)
     node.addService(PG.Execute(shell="bash", command=command))
     node.hardware_type = params.ProxyHardware
     iface = node.addInterface()
     iface.addAddress(PG.IPv4Address("10.3."+str(i+1)+".1", netmask))
     network.addInterface(iface)
+    current_proxy_id += num_proxy_on_this_node
 
 
 pc.printRequestRSpec(rspec)
