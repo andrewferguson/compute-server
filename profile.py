@@ -73,18 +73,22 @@ else:
 # Variable that stores configuration scripts and arguments
 profileConfigs = ""
 
+# Calculate the number of gNB per node
+gNBPerNode = int(math.ceil(params.numberGNB / params.machineNum))
+
 # Machines
 for i in range(0,params.machineNum):
     node = rspec.RawPC("node" + str(i))
     node.disk_image = os
     node.addService(PG.Execute(shell="bash", command=profileConfigs + "/local/repository/scripts/configure.sh"))
-
-    command = "/local/repository/scripts/build_kernel.sh {} {} {} {}".format(
+    command = "/local/repository/scripts/build_kernel.sh {} {} {} {} {} {} {}".format(
     params.token,           # $1 = token
     params.githubUser,      # $2 = GitHub username
     params.machineNum,      # $3 = machine number
-    i)                      # $4 = instance indexAdd commentMore actions
-    node.addService(PG.Execute(shell="bash", command=command))
+    i,                      # $4 = instance index
+    params.numberGNB,       # $5 = number of gNB
+    gNBPerNode,             # $6 = number of gNB per node
+    params.proxyPerNode)    # $7 = number of proxy per node
     node.addService(PG.Execute(shell="bash", command=command))
     node.hardware_type = params.Hardware
     iface = node.addInterface()
@@ -103,7 +107,6 @@ network.addInterface(iface)
 
 current_proxy_id = 0
 machinePNum = int(math.ceil(params.numberGNB / params.proxyPerNode))
-gNBPerNode = int(math.ceil(params.numberGNB / params.machineNum))
 for i in range(0,machinePNum):
     node = rspec.RawPC("Proxy" + str(i))
     node.disk_image = os

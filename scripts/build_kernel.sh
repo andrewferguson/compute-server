@@ -30,6 +30,20 @@ GITHUB_TOKEN="$1"
 GITHUB_USERNAME="$2"
 MACHINE_NUM="$3"
 INSTANCE_ID="$4"
+NUMBER_OF_GNB="$5"
+GNB_PER_NODE="$6"
+PROXY_PER_NODE="$7"
+
+step_log "Number of arguments: $#"
+step_log "GitHub token: $GITHUB_TOKEN"
+step_log "GitHub username: $GITHUB_USERNAME"
+step_log "Number of Machines: $MACHINE_NUM"
+step_log "Instance ID: $INSTANCE_ID"
+step_log "Number of gNB: $NUMBER_OF_GNB"
+step_log "gNB per Node: $GNB_PER_NODE"
+step_log "Proxy per Node: $PROXY_PER_NODE"
+
+
 USER_HOME="/users/$(whoami)"
 echo "Number of machines in this experiments are ${MACHINE_NUM}"
 kernel_repo="ujjwalpawar/chronos-kernel"
@@ -481,7 +495,6 @@ if [ -f "/local/.vm_setup_done" ] && [ -f "/local/.net_setup_done" ] && [ ! -f "
         # Controller VM
         ROLE_SCRIPT="/tmp/master_install_k0.sh"
         ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "bash $ROLE_SCRIPT"
-        ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" git clone --quiet "${qdt_link}"
     else
         # Worker VM
         ssh  $SSH_OPTS ubuntu@${INTERNAL_IP} "sudo apt -y update && sudo apt -y install sshpass"
@@ -499,6 +512,42 @@ if [ -f "/local/.vm_setup_done" ] && [ -f "/local/.net_setup_done" ] && [ ! -f "
 
     touch /local/.k0s_in_vm_done
 fi
+
+################################################################################
+# Step 6: Deploy the core and setup auto-deployment scripts
+################################################################################
+# Preconditions
+#   – /local/.k0s_in_vm_done exists   (k0s has been installed inside the VM)
+#   – /local/.audo_deploy_setup does NOT exist  (auto deployment scripts have not yet been setup)
+#   - $INSTANCE_ID must be 0 (this is the node hosting the k8s master node)
+################################################################################
+if [ -f "/local/.k0s_in_vm_done" ] && [ ! -f "/local/.audo_deploy_setup" ] && [ "$INSTANCE_ID" -eq 0 ]; then
+    step_log "Deploying the core and setting up the auto-deployment scripts"
+
+    step_log "Cloning quick_deployment_tools"
+    ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" git clone --quiet "${qdt_link} ~/quick_deployment_tools"
+
+    step_log "Deploying the core"
+    ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "export KUBECONFIG=~/admin.conf && cd ~/quick_deployment_tools/core/ && ./core_deploy.sh"
+    CORE_STATE="Not running"
+    until [ "$CORE_STATE" = "Running" ]; do
+        echo "Waiting for core pod to boot.... (current state: $CORE_STATE)"
+        sleep 10
+        CORE_STATE=$(ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "KUBECONFIG=~/admin.conf kubectl get pods -o wide" | grep "core-test-core" | awk -F ' ' '{ print $3 }')
+    done
+    CORE_IP=$(ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "KUBECONFIG=~/admin.conf kubectl get pods -o wide" | grep "core-test-core" | awk -F ' ' '{ print $6 }')
+    echo "Core running on IP $CORE_IP"
+
+    step_log "Modifying auto deployment script to match this deployment"
+    step_log "Core IP: $CORE_IP, Number of gNB: $NUMBER_OF_GNB, gNB per Node: $GNB_PER_NODE, Proxy per Node: $PROXY_PER_NODE"
+    ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" sed -i "s/__NUMBER_GNB__/$NUMBER_OF_GNB/g" "~/quick_deployment_tools/gnb-auto-deploy/values.yaml"
+    ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" sed -i "s/__GNB_PER_NODE__/$GNB_PER_NODE/g" "~/quick_deployment_tools/gnb-auto-deploy/values.yaml"
+    ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" sed -i "s/__PROXY_PER_NODE__/$PROXY_PER_NODE/g" "~/quick_deployment_tools/gnb-auto-deploy/values.yaml"
+    ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" sed -i "s/__CORE_IP__/$CORE_IP/g" "~/quick_deployment_tools/gnb-auto-deploy/values.yaml"
+
+    touch /local/.audo_deploy_setup
+fi
+
 ################################################################################
 # Step 5: All done
 ################################################################################
