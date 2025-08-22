@@ -62,9 +62,6 @@ RANGE_END="10.2.${INTERNAL_SUBNET}.254"
 ################################################################################
 # Step 1: Kernel Build
 ################################################################################
-touch /local/.kernel_done
-touch /local/.rebooted
-touch /local/.tsc_done
 if [ ! -f "/local/.kernel_done" ]; then
     step_log "Installing kernel build dependencies"
     sudo apt-get update
