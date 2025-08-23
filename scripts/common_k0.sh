@@ -14,11 +14,18 @@ log()  { echo -e "[\e[34mINFO\e[0m] $*"; }
 fail() { echo -e "[\e[31mFAIL\e[0m] $*"; exit 1; }
 
 install_deps() {
+  # Only complete once the dependencies have actually installed
+  # Blame the stupid "unattended-upgrades" for this - it occasionally prevents apt install from working
+  until apt list --installed | grep libsctp-dev; do
+    install_deps_single
+  done
+}
+
+install_deps_single() {
   log "Installing prerequisites"
-  sudo apt-get update -qq
-  sudo apt-get install -yqq curl conntrack socat ebtables iptables iputils-ping nano iperf3 >>"$LOG_FILE"
-  sudo apt-get install -yqq libsctp-dev lksctp-tools  zlib1g-dev
-  sudo modprobe sctp
+  sudo apt-get update -qq || true
+  sudo apt-get install -yqq curl conntrack socat ebtables iptables iputils-ping nano iperf3 libsctp-dev lksctp-tools zlib1g-dev || true
+  sudo modprobe sctp || true
   log "Installing Helm"
   curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash >>"$LOG_FILE"
 }
