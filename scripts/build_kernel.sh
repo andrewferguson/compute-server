@@ -439,7 +439,10 @@ if [ -f "/local/.vm_setup_done" ] && [ ! -f "/local/.net_setup_done" ]; then
     password="1997"
     SSH_OPTS="-oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null"
     step_log "create ssh keys"
-    ssh-keygen -q -t rsa -N '' -f ~/.ssh/id_rsa
+    geni-get key > ${HOME}/.ssh/id_rsa
+    chmod 600 ${HOME}/.ssh/id_rsa
+    ssh-keygen -y -f ${HOME}/.ssh/id_rsa > ${HOME}/.ssh/id_rsa.pub
+    grep -q -f ${HOME}/.ssh/id_rsa.pub ${HOME}/.ssh/authorized_keys || cat ${HOME}/.ssh/id_rsa.pub >> ${HOME}/.ssh/authorized_keys
     step_log "Copying ssh keys"
     sshpass -p $password ssh-copy-id $SSH_OPTS ubuntu@${INTERNAL_IP}
 

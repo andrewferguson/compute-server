@@ -6,6 +6,12 @@ GITHUB_USERNAME="$1"
 GITHUB_TOKEN="$2"
 NUM_OUTER_NODES="$3"
 
+# Setup ssh keys
+geni-get key > ${HOME}/.ssh/id_rsa
+chmod 600 ${HOME}/.ssh/id_rsa
+ssh-keygen -y -f ${HOME}/.ssh/id_rsa > ${HOME}/.ssh/id_rsa.pub
+grep -q -f ${HOME}/.ssh/id_rsa.pub ${HOME}/.ssh/authorized_keys || cat ${HOME}/.ssh/id_rsa.pub >> ${HOME}/.ssh/authorized_keys
+
 # Clone and build the global SC
 repo="ujjwalpawar/phobos-5g"
 git_url="https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/${repo}.git"
