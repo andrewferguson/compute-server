@@ -92,6 +92,28 @@ for i in $(seq $FIRST_PROXY_ID $(($FIRST_PROXY_ID + $NUM_PROXY_ON_THIS_NODE - 1)
   echo "$GNB_IP" > "$HOME/gnb_ips/$i"
   echo "$i" > "$HOME/gnb_ids/$i"
 
+  # Create the systemd service for the proxy instance
+  # Generate the systemd service for the global sc
+  cat <<EOF | sudo tee "/etc/systemd/system/proxy$i.service"
+[Unit]
+Description=Proxy $i
+After=network.target
+
+[Service]
+ExecStart=/users/geniuser/run_proxy/$i.sh
+Restart=no
+User=root
+WorkingDirectory=/users/geniuser/phobos-5g
+KillSignal=SIGINT
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  # Ensure systemd service is ready to be started
+  sudo systemctl daemon-reload
+  sudo systemctl stop proxy$i # dont start it now
+
   # Log what has been done
   echo "Proxy $i ($PROXY_IP), connecting to gNB $i ($GNB_IP), supporting $TOTAL_NUM_UE UEs"
   ((counter++))
