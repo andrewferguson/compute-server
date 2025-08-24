@@ -85,7 +85,7 @@ for i in $(seq $FIRST_PROXY_ID $(($FIRST_PROXY_ID + $NUM_PROXY_ON_THIS_NODE - 1)
 
   # Create the run script for the proxy instance
   echo "#!/bin/bash" > "$HOME/run_proxy/$i.sh"
-  echo "$HOME/phobos-5g/build/proxy $TOTAL_NUM_UE --chronos5g $HOME/gnb_ips/$i $HOME/gnb_ids/$i $i $PROXY_IP 10.4.1.1" > "$HOME/run_proxy/$i.sh"
+  echo "$HOME/phobos-5g/build/proxy $TOTAL_NUM_UE --chronos5g $HOME/gnb_ips/$i $HOME/gnb_ids/$i $i $PROXY_IP 10.4.1.1" >> "$HOME/run_proxy/$i.sh"
   chmod +x "$HOME/run_proxy/$i.sh"
 
   # Create the config files for the proxy instance
