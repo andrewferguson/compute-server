@@ -6,7 +6,7 @@ set -euo pipefail
 exec >> $LOG_FILE
 exec 2>&1
 
-LOG_DIR="/home/ubuntu"
+LOG_DIR="$HOME"
 K0S_VERSION_CHANNEL="stable"
 K0S_BIN="/usr/local/bin/k0s"
 
@@ -16,7 +16,7 @@ fail() { echo -e "[\e[31mFAIL\e[0m] $*"; exit 1; }
 install_deps() {
   # Only complete once the dependencies have actually installed
   # Blame the stupid "unattended-upgrades" for this - it occasionally prevents apt install from working
-  until apt list --installed | grep libsctp-dev; do
+  until apt list --installed | grep iperf3; do
     install_deps_single
   done
 }
@@ -24,7 +24,7 @@ install_deps() {
 install_deps_single() {
   log "Installing prerequisites"
   sudo apt-get update -qq || true
-  sudo apt-get install -yqq curl conntrack socat ebtables iptables iputils-ping nano iperf3 libsctp-dev lksctp-tools zlib1g-dev || true
+  sudo apt-get install -yqq curl conntrack socat ebtables iptables iputils-ping nano iperf3 libsctp-dev lksctp-tools zlib1g-dev sshpass || true
   sudo modprobe sctp || true
   log "Installing Helm"
   curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash >>"$LOG_FILE"
@@ -38,17 +38,6 @@ install_k0s() {
   curl -L https://github.com/containernetworking/plugins/releases/download/v1.4.0/cni-plugins-linux-amd64-v1.4.0.tgz \
     | sudo tar -xz -C /opt/cni/bin
 
-}
-
-wait_for_token() {         # $1 = controller_ip
-  local ctl_ip="10.2.1.2"; local token=""
-  log "Waiting for join token from $ctl_ip ..."
-  for _ in {1..30}; do
-      token=$(ssh -oStrictHostKeyChecking=no ubuntu@"$ctl_ip" cat /home/ubuntu/token-file 2>/dev/null || true)
-      [[ -n "$token" ]] && { echo "$token"; return 0; }
-      sleep 5
-  done
-  return 1
 }
 
 

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
-LOG_FILE="/home/ubuntu/k0s_master.log"
+LOG_FILE="$HOME/k0s_master.log"
+if [ ! -f "/tmp/common_k0s.sh" ]; then
+  cp /local/repository/scripts/common_k0.sh /tmp/common_k0.sh
+fi
 source /tmp/common_k0.sh
 
 install_deps
@@ -15,7 +18,7 @@ sleep 1
 log "starting k0s"
 sudo k0s start
 
-dest=/home/ubuntu/token-file   # final location
+dest=$HOME/token-file   # final location
 delay=5                        # seconds between attempts
 
 while :; do
@@ -34,11 +37,11 @@ done
 sudo k0s kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
 sudo cp /var/lib/k0s/pki/admin.conf ~/admin.conf
 echo 'export KUBECONFIG=~/admin.conf' >> ~/.bashrc
-sudo chown ubuntu ~/admin.conf
+sudo chown $USER ~/admin.conf
 chmod g-r ~/admin.conf
 sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq && sudo chmod +x /usr/bin/yq
 echo -e '#!/bin/bash\nexec k0s kubectl "$@"' | sudo tee /usr/local/bin/kubectl > /dev/null
 sudo chmod +x /usr/local/bin/kubectl
 KUBECONFIG=~/admin.conf kubectl taint nodes ins0vm node-role.kubernetes.io/control-plane-
 #Generate and save Worker token
-log "Worker join-token written to /home/ubuntu/token-file"
+log "Worker join-token written to $HOME/token-file"

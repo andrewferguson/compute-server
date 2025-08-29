@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 # Usage: sudo ./worker_install_k0s.sh <controller_ip>
 set -euo pipefail
-CTL_IP=${1:? "controller IP required"}
-LOG_FILE="/home/ubuntu/k0s_worker.log"
+LOG_FILE="$HOME/k0s_worker.log"
+if [ ! -f "/tmp/common_k0s.sh" ]; then
+  cp /local/repository/scripts/common_k0.sh /tmp/common_k0.sh
+fi
 source /tmp/common_k0.sh
 
 install_deps
 install_k0s
 
 remote="ubuntu@10.2.1.2:~/token-file"
-target="/home/ubuntu/token-file"         # where we want it locally
+target="$HOME/token-file"         # where we want it locally
 delay=5                           # seconds to wait between tries
 
 # Infinite for-loop: for (;;);
@@ -31,5 +33,5 @@ for (( ; ; )); do
 done
 
 log "Joining cluster with token"
-sudo k0s install worker --token-file  /home/ubuntu/token-file>>"$LOG_FILE"
+sudo k0s install worker --token-file  $HOME/token-file>>"$LOG_FILE"
 sudo k0s start
