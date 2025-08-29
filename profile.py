@@ -105,20 +105,17 @@ iface = node.addInterface()
 iface.addAddress(PG.IPv4Address("10.4.1.1", netmask))
 network.addInterface(iface)
 
-current_proxy_id = 0
 machinePNum = int(math.ceil(params.numberGNB / params.proxyPerNode))
 for i in range(0,machinePNum):
     node = rspec.RawPC("Proxy" + str(i))
     node.disk_image = os
-    num_proxy_on_this_node = params.numberGNB - current_proxy_id if current_proxy_id + params.proxyPerNode + 1 > params.numberGNB else params.proxyPerNode
     node.addService(PG.Execute(shell="bash", command=profileConfigs + "/local/repository/scripts/configure.sh"))
-    command="/local/repository/scripts/build_proxy.sh {} {} {} {} {} {} {} {}".format(params.githubUser, params.token, params.machineNum, gNBPerNode, i, num_proxy_on_this_node, current_proxy_id, params.numberUE)
+    command="/local/repository/scripts/build_proxy.sh {} {}".format(params.machineNum, i)
     node.addService(PG.Execute(shell="bash", command=command))
     node.hardware_type = params.ProxyHardware
     iface = node.addInterface()
     iface.addAddress(PG.IPv4Address("10.3."+str(i+1)+".1", netmask))
     network.addInterface(iface)
-    current_proxy_id += num_proxy_on_this_node
 
 
 pc.printRequestRSpec(rspec)
