@@ -98,8 +98,8 @@ for i in range(0,params.machineNum):
 node = rspec.RawPC("GlobalSC")
 node.disk_image = os
 node.addService(PG.Execute(shell="bash", command=profileConfigs + "/local/repository/scripts/configure.sh"))
-command="/local/repository/scripts/build_globalsc.sh {} {} {}".format(params.githubUser, params.token, params.machineNum)
-node.addService(PG.Execute(shell="bash", command=command)) # comment out while we debug / improve the proxy script
+command="/local/repository/scripts/build_globalsc.sh {}".format(params.machineNum)
+node.addService(PG.Execute(shell="bash", command=command))
 node.hardware_type = params.ProxyHardware
 iface = node.addInterface()
 iface.addAddress(PG.IPv4Address("10.4.1.1", netmask))
