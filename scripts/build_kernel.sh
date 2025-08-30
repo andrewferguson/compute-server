@@ -527,24 +527,6 @@ if [ -f "/local/.k0s_in_vm_done" ] && [ ! -f "/local/.audo_deploy_setup" ] && [ 
     step_log "Cloning quick_deployment_tools"
     ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" git clone --quiet "${qdt_link} ~/quick_deployment_tools"
 
-    step_log "Deploying the core"
-    ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "export KUBECONFIG=~/admin.conf && cd ~/quick_deployment_tools/core/ && ./core_deploy.sh"
-    CORE_STATE="Not running"
-    until [ "$CORE_STATE" = "Running" ]; do
-        echo "Waiting for core pod to boot.... (current state: $CORE_STATE)"
-        sleep 10
-        CORE_STATE=$(ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "KUBECONFIG=~/admin.conf kubectl get pods -o wide" | grep "core-test-core" | awk -F ' ' '{ print $3 }')
-    done
-    CORE_IP=$(ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "KUBECONFIG=~/admin.conf kubectl get pods -o wide" | grep "core-test-core" | awk -F ' ' '{ print $6 }')
-    echo "Core running on IP $CORE_IP"
-
-    step_log "Modifying auto deployment script to match this deployment"
-    step_log "Core IP: $CORE_IP, Number of gNB: $NUMBER_OF_GNB, gNB per Node: $GNB_PER_NODE, Proxy per Node: $PROXY_PER_NODE"
-    ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" sed -i "s/__NUMBER_GNB__/$NUMBER_OF_GNB/g" "~/quick_deployment_tools/gnb-auto-deploy/values.yaml"
-    ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" sed -i "s/__GNB_PER_NODE__/$GNB_PER_NODE/g" "~/quick_deployment_tools/gnb-auto-deploy/values.yaml"
-    ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" sed -i "s/__PROXY_PER_NODE__/$PROXY_PER_NODE/g" "~/quick_deployment_tools/gnb-auto-deploy/values.yaml"
-    ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" sed -i "s/__CORE_IP__/$CORE_IP/g" "~/quick_deployment_tools/gnb-auto-deploy/values.yaml"
-
     touch /local/.audo_deploy_setup
 fi
 
