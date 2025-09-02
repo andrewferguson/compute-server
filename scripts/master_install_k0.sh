@@ -13,7 +13,7 @@ log "Installing controller service"
 k0s config create > k0s.yaml
 sed -i 's/^    provider: kuberouter$/    provider: custom/' k0s.yaml
 log "configuring controller"
-sudo k0s install controller -c k0s.yaml --enable-worker
+sudo k0s install controller -c k0s.yaml --enable-worker --kubelet-extra-args="--max-pods=243"
 sleep 1
 log "starting k0s"
 sudo k0s start
