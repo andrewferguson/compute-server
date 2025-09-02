@@ -2,7 +2,7 @@
 # Usage: sudo ./worker_install_k0s.sh <controller_ip>
 set -euo pipefail
 LOG_FILE="$HOME/k0s_worker.log"
-if [ ! -f "/tmp/common_k0s.sh" ]; then
+if [ ! -f "/tmp/common_k0.sh" ]; then
   cp /local/repository/scripts/common_k0.sh /tmp/common_k0.sh
 fi
 source /tmp/common_k0.sh

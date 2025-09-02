@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 LOG_FILE="$HOME/k0s_master.log"
-if [ ! -f "/tmp/common_k0s.sh" ]; then
+if [ ! -f "/tmp/common_k0.sh" ]; then
   cp /local/repository/scripts/common_k0.sh /tmp/common_k0.sh
 fi
 source /tmp/common_k0.sh
