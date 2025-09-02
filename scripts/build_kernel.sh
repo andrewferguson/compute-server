@@ -30,18 +30,12 @@ GITHUB_TOKEN="$1"
 GITHUB_USERNAME="$2"
 MACHINE_NUM="$3"
 INSTANCE_ID="$4"
-NUMBER_OF_GNB="$5"
-GNB_PER_NODE="$6"
-PROXY_PER_NODE="$7"
 
 step_log "Number of arguments: $#"
 step_log "GitHub token: $GITHUB_TOKEN"
 step_log "GitHub username: $GITHUB_USERNAME"
 step_log "Number of Machines: $MACHINE_NUM"
 step_log "Instance ID: $INSTANCE_ID"
-step_log "Number of gNB: $NUMBER_OF_GNB"
-step_log "gNB per Node: $GNB_PER_NODE"
-step_log "Proxy per Node: $PROXY_PER_NODE"
 
 
 USER_HOME="/users/$(whoami)"
