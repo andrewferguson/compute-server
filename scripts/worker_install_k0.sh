@@ -22,7 +22,9 @@ for (( ; ; )); do
   }
 
   echo "Attempting to copy token-file..."
-  sshpass -p 1997 ssh-copy-id -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null ubuntu@10.2.1.2
+  sshpass -p 1997 ssh-copy-id -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null ubuntu@10.2.1.2 || {
+    echo "Unable to ssh to k8s control node..."
+  }
   scp  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$remote" "$target" && {
     echo "✓ Copy succeeded."
     break
