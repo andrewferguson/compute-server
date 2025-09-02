@@ -259,13 +259,13 @@ step_log "pinning cpu"
 block=$(
   echo "  <iothreads>1</iothreads>"
   echo "  <cputune>"
-  for i in $(seq 0 50); do
+  for i in $(seq 0 22); do
     printf "    <vcpupin vcpu='%d' cpuset='%d'/>\n" "$i" "$((i+2))"
   done
-  echo "    <emulatorpin cpuset='53'/>"
-  echo "    <iothreadpin iothread='1' cpuset='54'/>"
+  echo "    <emulatorpin cpuset='23'/>"
+  echo "    <iothreadpin iothread='1' cpuset='24'/>"
   echo "    <vcpusched vcpus='0'    scheduler='fifo' priority='1'/>"
-  echo "    <vcpusched vcpus='1-50' scheduler='fifo' priority='1'/>"
+  echo "    <vcpusched vcpus='1-22' scheduler='fifo' priority='1'/>"
   echo "    <emulatorsched scheduler='fifo' priority='1'/>"
   echo "    <iothreadsched iothreads='1' scheduler='fifo' priority='1'/>"
   echo "  </cputune>"
