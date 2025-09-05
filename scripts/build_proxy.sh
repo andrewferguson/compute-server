@@ -48,5 +48,8 @@ for i in $(seq 1 254); do
   sudo ip addr add "10.3.$(($PROXY_NODE_ID + 1)).$i/24" dev "$primary_if"
 done
 
+# Update the hostname (used as node name in k8s)
+sudo hostnamectl set-hostname "proxy-$PROXY_NODE_ID"
+
 # Join the k8s cluster
 bash /local/repository/scripts/worker_install_k0.sh

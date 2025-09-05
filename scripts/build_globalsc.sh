@@ -18,5 +18,8 @@ chmod 600 ${HOME}/.ssh/id_rsa
 ssh-keygen -y -f ${HOME}/.ssh/id_rsa > ${HOME}/.ssh/id_rsa.pub
 grep -q -f ${HOME}/.ssh/id_rsa.pub ${HOME}/.ssh/authorized_keys || cat ${HOME}/.ssh/id_rsa.pub >> ${HOME}/.ssh/authorized_keys
 
+# Update the hostname (used as node name in k8s)
+sudo hostnamectl set-hostname globalsc
+
 # Join the k8s cluster
 bash /local/repository/scripts/worker_install_k0.sh
