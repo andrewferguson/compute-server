@@ -35,5 +35,9 @@ for (( ; ; )); do
 done
 
 log "Joining cluster with token"
-sudo k0s install worker --token-file  $HOME/token-file --kubelet-extra-args="--max-pods=243" >>"$LOG_FILE"
+LABEL_ARGS=""
+if [[ "$HOSTNAME" == "ins"* ]]; then
+  LABEL_ARGS='--labels "dilated=true"'
+fi
+sudo k0s install worker --token-file  $HOME/token-file --kubelet-extra-args="--max-pods=243" $LABEL_ARGS >>"$LOG_FILE"
 sudo k0s start
