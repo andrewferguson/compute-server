@@ -521,6 +521,22 @@ if [ -f "/local/.k0s_in_vm_done" ] && [ ! -f "/local/.audo_deploy_setup" ] && [ 
     step_log "Cloning quick_deployment_tools"
     ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" git clone --quiet "${qdt_link} ~/quick_deployment_tools"
 
+    step_log "Appending aliases to .bashrc"
+    ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" 'cat << EOF >> $HOME/.bashrc
+s() {
+  helm install --values values.yaml $1 ./$1/
+}
+
+ns() {
+  helm uninstall $1
+}
+
+alias k="kubectl"
+alias l="kubectl logs"
+alias p="kubectl get pods"
+alias pw="kubectl get pods -o wide"
+EOF'
+
     touch /local/.audo_deploy_setup
 fi
 
