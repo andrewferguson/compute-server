@@ -13,11 +13,11 @@ install_k0s
 sudo hostnamectl set-hostname "controller"
 
 log "Installing controller service"
-k0s config create > k0s.yaml
-sed -i 's/^    provider: kuberouter$/    provider: custom/' k0s.yaml
-sed -i 's/^  controllerManager: {}/  controllerManager:\n    extraArgs:\n      node-monitor-grace-period: 50000s/g' k0s.yaml
+k0s config create > $HOME/k0s.yaml
+sed -i 's/^    provider: kuberouter$/    provider: custom/' $HOME/k0s.yaml
+sed -i 's/^  controllerManager: {}/  controllerManager:\n    extraArgs:\n      node-monitor-grace-period: 50000s/g' $HOME/k0s.yaml
 log "configuring controller"
-sudo k0s install controller -c k0s.yaml --enable-worker --kubelet-extra-args="--max-pods=243"
+sudo k0s install controller -c $HOME/k0s.yaml --enable-worker --kubelet-extra-args="--max-pods=243"
 sleep 1
 log "starting k0s"
 sudo k0s start
