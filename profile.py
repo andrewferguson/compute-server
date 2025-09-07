@@ -87,7 +87,7 @@ for i in range(0,params.machineNum):
     iface.addAddress(PG.IPv4Address("10.1."+str(i+1)+".1", netmask))
     network.addInterface(iface)
 
-node = rspec.RawPC("GlobalSC")
+node = rspec.RawPC("Global-SC")
 node.disk_image = os
 node.addService(PG.Execute(shell="bash", command=profileConfigs + "/local/repository/scripts/configure.sh"))
 command="/local/repository/scripts/build_globalsc.sh {}".format(params.machineNum)
