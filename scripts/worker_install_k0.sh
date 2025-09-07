@@ -14,6 +14,10 @@ remote="ubuntu@10.2.1.2:~/token-file"
 target="$HOME/token-file"         # where we want it locally
 delay=5                           # seconds to wait between tries
 
+# Delete the token file if it already exists
+# (can happen if the script has been run before and failed)
+[[ -f $target ]] && rm $target
+
 # Infinite for-loop: for (;;);
 for (( ; ; )); do
   [[ -f $target ]] && {            # stop if we already have it
