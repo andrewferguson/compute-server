@@ -10,7 +10,11 @@ install_deps
 install_k0s
 
 # Update the hostname (used as node name in k8s)
-sudo hostnamectl set-hostname "controller"
+until sudo hostnamectl set-hostname "controller"
+do
+  echo "Failed to set hostname..."
+  sleep 5
+done
 
 log "Installing controller service"
 k0s config create > $HOME/k0s.yaml

@@ -19,7 +19,11 @@ ssh-keygen -y -f ${HOME}/.ssh/id_rsa > ${HOME}/.ssh/id_rsa.pub
 grep -q -f ${HOME}/.ssh/id_rsa.pub ${HOME}/.ssh/authorized_keys || cat ${HOME}/.ssh/id_rsa.pub >> ${HOME}/.ssh/authorized_keys
 
 # Update the hostname (used as node name in k8s)
-sudo hostnamectl set-hostname globalsc
+until sudo hostnamectl set-hostname globalsc
+do
+  echo "Failed to set hostname..."
+  sleep 5
+done
 
 # Join the k8s cluster
 bash /local/repository/scripts/worker_install_k0.sh
