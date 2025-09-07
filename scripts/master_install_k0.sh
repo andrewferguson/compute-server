@@ -9,6 +9,9 @@ source /tmp/common_k0.sh
 install_deps
 install_k0s
 
+# Update the hostname (used as node name in k8s)
+sudo hostnamectl set-hostname "controller"
+
 log "Installing controller service"
 k0s config create > k0s.yaml
 sed -i 's/^    provider: kuberouter$/    provider: custom/' k0s.yaml
