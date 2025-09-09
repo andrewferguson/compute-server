@@ -28,6 +28,7 @@ pc.defineParameter("machineNum", "Number of gNB / UE Nodes", portal.ParameterTyp
 pc.defineParameter("machinePNum", "Number of Proxy Nodes", portal.ParameterType.INTEGER, 1)
 pc.defineParameter("Hardware", "Outer Node Hardware", portal.ParameterType.NODETYPE,"pc")
 pc.defineParameter("ProxyHardware", "Proxy Machine Hardware", portal.ParameterType.NODETYPE,"pc")
+pc.defineParameter("ManagerHardware", "k8s Controller Hardware", portal.ParameterType.NODETYPE,"pc")
 pc.defineParameter("OS", "Operating System", portal.ParameterType.STRING,"ubuntu22",[("ubuntu18","ubuntu18"),("ubuntu20","ubuntu20"), ("ubuntu22", "ubuntu22")])
 
 #GitHub parameters
@@ -72,7 +73,7 @@ else:
 profileConfigs = ""
 
 # Machines
-for i in range(0,params.machineNum):
+for i in range(0,params.machineNum+1):
     node = rspec.RawPC("node" + str(i))
     node.disk_image = os
     node.addService(PG.Execute(shell="bash", command=profileConfigs + "/local/repository/scripts/configure.sh"))
@@ -82,7 +83,7 @@ for i in range(0,params.machineNum):
     params.machineNum,      # $3 = machine number
     i)                      # $4 = instance index
     node.addService(PG.Execute(shell="bash", command=command))
-    node.hardware_type = params.Hardware
+    node.hardware_type = params.ManagerHardware if i == 0 else params.Hardware
     iface = node.addInterface()
     iface.addAddress(PG.IPv4Address("10.1."+str(i+1)+".1", netmask))
     network.addInterface(iface)
