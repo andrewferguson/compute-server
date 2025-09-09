@@ -549,11 +549,11 @@ if [ -f "/local/.k0s_in_vm_done" ] && [ ! -f "/local/.audo_deploy_setup" ] && [ 
     step_log "Appending aliases to .bashrc"
     ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" 'cat << EOF >> $HOME/.bashrc
 s() {
-  helm install --values values.yaml $1 ./$1/
+  helm install --values values.yaml \$1 ./\$1/
 }
 
 ns() {
-  helm uninstall $1
+  helm uninstall \$1
 }
 
 alias k="kubectl"
