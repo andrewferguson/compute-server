@@ -56,6 +56,14 @@ RANGE_END="10.2.${INTERNAL_SUBNET}.254"
 ################################################################################
 # Step 1: Kernel Build
 ################################################################################
+CPU_VENDOR=$(lscpu | grep "^Vendor ID:" | awk -F ' ' '{ print $3 }')
+[ "$CPU_VENDOR" != "GenuineIntel" ] && {
+  echo "Not an Intel CPU"
+  echo "Skipping building the custom kernel"
+  touch /local/.kernel_done
+  touch /local/.rebooted
+  touch /local/.tsc_done
+}
 if [ ! -f "/local/.kernel_done" ]; then
     step_log "Installing kernel build dependencies"
     sudo apt-get update
