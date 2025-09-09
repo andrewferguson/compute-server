@@ -80,7 +80,7 @@ for i in range(0,params.machineNum+1):
     command = "/local/repository/scripts/build_kernel.sh {} {} {} {}".format(
     params.token,           # $1 = token
     params.githubUser,      # $2 = GitHub username
-    params.machineNum,      # $3 = machine number
+    params.machineNum+1,    # $3 = machine number
     i)                      # $4 = instance index
     node.addService(PG.Execute(shell="bash", command=command))
     node.hardware_type = params.ManagerHardware if i == 0 else params.Hardware
@@ -91,7 +91,7 @@ for i in range(0,params.machineNum+1):
 node = rspec.RawPC("Global-SC")
 node.disk_image = os
 node.addService(PG.Execute(shell="bash", command=profileConfigs + "/local/repository/scripts/configure.sh"))
-command="/local/repository/scripts/build_globalsc.sh {}".format(params.machineNum)
+command="/local/repository/scripts/build_globalsc.sh {}".format(params.machineNum+1)
 node.addService(PG.Execute(shell="bash", command=command))
 node.hardware_type = params.ProxyHardware
 iface = node.addInterface()
@@ -102,7 +102,7 @@ for i in range(0,params.machinePNum):
     node = rspec.RawPC("Proxy" + str(i))
     node.disk_image = os
     node.addService(PG.Execute(shell="bash", command=profileConfigs + "/local/repository/scripts/configure.sh"))
-    command="/local/repository/scripts/build_proxy.sh {} {}".format(params.machineNum, i)
+    command="/local/repository/scripts/build_proxy.sh {} {}".format(params.machineNum+1, i)
     node.addService(PG.Execute(shell="bash", command=command))
     node.hardware_type = params.ProxyHardware
     iface = node.addInterface()
