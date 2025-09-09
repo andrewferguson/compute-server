@@ -256,16 +256,33 @@ if [ -f "/local/.tsc_done" ] && [ ! -f "/local/.vm_setup_done" ]; then
 
 step_log "pinning cpu"
         # Ensure <vcpu> = 54 and placement='static'
+NUM_CPU=$(lscpu | grep "^CPU(s):" | awk -F ' ' '{ print $2 }')
+[ "$NUM_CPU" -lt "32" ] && {
+  echo "<32 CPU cores"
+  echo "Aborting"
+  exit 1
+}
+SEQVAR="22"
+EMULATORPIN_CPUSET="23"
+IOTHREADPIN_CPUSET="24"
+VCPUSCHED="22"
+[ "$NUM_CPU" -ge "56" ] && {
+  echo ">= 56 CPU cores"
+  SEQVAR="50"
+  EMULATORPIN_CPUSET="53"
+  IOTHREADPIN_CPUSET="54"
+  VCPUSCHED="50"
+}
 block=$(
   echo "  <iothreads>1</iothreads>"
   echo "  <cputune>"
-  for i in $(seq 0 50); do
+  for i in $(seq 0 $SEQVAR); do
     printf "    <vcpupin vcpu='%d' cpuset='%d'/>\n" "$i" "$((i+2))"
   done
-  echo "    <emulatorpin cpuset='53'/>"
-  echo "    <iothreadpin iothread='1' cpuset='54'/>"
+  echo "    <emulatorpin cpuset='$EMULATORPIN_CPUSET'/>"
+  echo "    <iothreadpin iothread='1' cpuset='$IOTHREADPIN_CPUSET'/>"
   echo "    <vcpusched vcpus='0'    scheduler='fifo' priority='1'/>"
-  echo "    <vcpusched vcpus='1-50' scheduler='fifo' priority='1'/>"
+  echo "    <vcpusched vcpus='1-$VCPUSCHED' scheduler='fifo' priority='1'/>"
   echo "    <emulatorsched scheduler='fifo' priority='1'/>"
   echo "    <iothreadsched iothreads='1' scheduler='fifo' priority='1'/>"
   echo "  </cputune>"
