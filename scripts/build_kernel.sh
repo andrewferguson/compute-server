@@ -546,6 +546,9 @@ if [ -f "/local/.k0s_in_vm_done" ] && [ ! -f "/local/.audo_deploy_setup" ] && [ 
     step_log "Cloning quick_deployment_tools"
     ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" git clone --quiet "${qdt_link} ~/quick_deployment_tools"
 
+    step_log "Setting up some dependencies required by quick_deployment_tools"
+    sudo apt install -y parallel
+
     step_log "Appending aliases to .bashrc"
     ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" 'cat << EOF >> $HOME/.bashrc
 s() {
