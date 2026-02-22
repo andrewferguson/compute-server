@@ -7,7 +7,7 @@ exec >> $LOG_FILE
 exec 2>&1
 
 LOG_DIR="$HOME"
-K0S_VERSION_CHANNEL="stable"
+K0S_VERSION="v1.27.13+k0s.0"
 K0S_BIN="/usr/local/bin/k0s"
 
 log()  { echo -e "[\e[34mINFO\e[0m] $*"; }
@@ -31,8 +31,8 @@ install_deps_single() {
 }
 
 install_k0s() {
-  log "Installing k0s ($K0S_VERSION_CHANNEL)"
-  curl -sSLf https://get.k0s.sh | sudo bash -s -- "$K0S_VERSION_CHANNEL" >>"$LOG_FILE"
+  log "Installing k0s ($K0S_VERSION)"
+  curl -sSLf https://get.k0s.sh | sudo K0S_VERSION="$K0S_VERSION" sh >> "$LOG_FILE"
     # Download and install the standard CNI plugins
   sudo mkdir -p /opt/cni/bin
   curl -L https://github.com/containernetworking/plugins/releases/download/v1.4.0/cni-plugins-linux-amd64-v1.4.0.tgz \
