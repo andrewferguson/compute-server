@@ -26,6 +26,9 @@ install_deps_single() {
   sudo apt-get update -qq || true
   sudo apt-get install -yqq curl conntrack socat ebtables iptables iputils-ping nano iperf3 libsctp-dev lksctp-tools zlib1g-dev sshpass || true
   sudo modprobe sctp || true
+  log "Enabling br_netfilter (which needs to be done manually now for some unknown reason...)"
+  sudo modprobe br_netfilter
+  echo "br_netfilter" | sudo tee /etc/modules-load.d/br_netfilter.conf
   log "Installing Helm"
   curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash >>"$LOG_FILE"
 }
