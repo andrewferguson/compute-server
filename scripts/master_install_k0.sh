@@ -44,7 +44,10 @@ while :; do
 done
 sudo k0s kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
 sudo cp /var/lib/k0s/pki/admin.conf ~/admin.conf
-echo 'export KUBECONFIG=~/admin.conf' >> ~/.bashrc
+cat > ~/.chronos <<'EOF'
+export KUBECONFIG=~/admin.conf
+EOF
+grep -qxF '[ -f ~/.chronos ] && source ~/.chronos' ~/.bashrc || echo '[ -f ~/.chronos ] && source ~/.chronos' >> ~/.bashrc
 sudo chown $USER ~/admin.conf
 chmod g-r ~/admin.conf
 sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq && sudo chmod +x /usr/bin/yq

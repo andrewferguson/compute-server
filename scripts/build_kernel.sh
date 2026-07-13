@@ -549,8 +549,10 @@ if [ -f "/local/.k0s_in_vm_done" ] && [ ! -f "/local/.audo_deploy_setup" ] && [ 
     step_log "Setting up some dependencies required by quick_deployment_tools"
     sudo apt install -y parallel
 
-    step_log "Appending aliases to .bashrc"
-    ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" 'cat << EOF >> $HOME/.bashrc
+    step_log "Writing Chronos shell helpers to ~/.chronos"
+    ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "cat > \$HOME/.chronos <<'EOF'
+export KUBECONFIG=~/admin.conf
+
 s() {
   helm install --values values.yaml \$1 ./\$1/
 }
@@ -559,11 +561,23 @@ ns() {
   helm uninstall \$1
 }
 
-alias k="kubectl"
-alias l="kubectl logs"
-alias p="kubectl get pods"
-alias pw="kubectl get pods -o wide"
-EOF'
+k() {
+  kubectl \"\$@\"
+}
+
+l() {
+  kubectl logs \"\$@\"
+}
+
+p() {
+  kubectl get pods \"\$@\"
+}
+
+pw() {
+  kubectl get pods -o wide \"\$@\"
+}
+EOF
+grep -qxF '[ -f \$HOME/.chronos ] && source \$HOME/.chronos' \$HOME/.bashrc || echo '[ -f \$HOME/.chronos ] && source \$HOME/.chronos' >> \$HOME/.bashrc"
 
     touch /local/.audo_deploy_setup
 fi
