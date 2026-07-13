@@ -16,7 +16,8 @@ if [ -f "/local/.rebooted" ]; then
 fi
 
 # Updating APT repos for installation scripts
-sudo apt update
+source /local/repository/scripts/retry_helpers.sh
+apt_get_update_soft
 
 echo "Executing one-time configurations"
 

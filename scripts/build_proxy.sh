@@ -24,8 +24,9 @@ function step_log() {
 NUM_OUTER_NODES="$1"
 PROXY_NODE_ID="$2"
 
-sudo apt update
-sudo apt-get install -yqq libsctp-dev lksctp-tools  zlib1g-dev
+source /local/repository/scripts/retry_helpers.sh
+apt_get_update_soft
+apt_get_retry install -qq libsctp-dev lksctp-tools zlib1g-dev
 sudo modprobe sctp
 for (( i=0; i<NUM_OUTER_NODES; i++ )); do
   DEST_NET=$((1 + i))

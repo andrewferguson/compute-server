@@ -37,6 +37,11 @@ step_log "GitHub username: $GITHUB_USERNAME"
 step_log "Number of Machines: $MACHINE_NUM"
 step_log "Instance ID: $INSTANCE_ID"
 
+# Shared lock-tolerant / retrying apt + download wrappers. These hard-fail loudly on
+# exhaustion of their per-occurrence budget, which (since this script has no `set -e`)
+# aborts the script before any `.done` marker is written for a failed step.
+source /local/repository/scripts/retry_helpers.sh
+
 
 USER_HOME="/users/$(whoami)"
 echo "Number of machines in this experiments are ${MACHINE_NUM}"
@@ -66,11 +71,11 @@ CPU_VENDOR=$(lscpu | grep "^Vendor ID:" | awk -F ' ' '{ print $3 }')
 }
 if [ ! -f "/local/.kernel_done" ]; then
     step_log "Installing kernel build dependencies"
-    sudo apt-get update
-    sudo apt-get install -y build-essential git libncurses-dev bison flex libssl-dev libelf-dev dwarves ripgrep
+    apt_get_update_soft
+    apt_get_retry install build-essential git libncurses-dev bison flex libssl-dev libelf-dev dwarves ripgrep
 
     step_log "Cloning kernel repo to ~/chronos-kernel"
-    git clone --quiet "${kernel_link}" "${USER_HOME}/chronos-kernel"
+    git_clone_retry "${kernel_link}" "${USER_HOME}/chronos-kernel" --quiet
     cd "${USER_HOME}/chronos-kernel"
 
     step_log "Copying current kernel config to .config"
@@ -104,7 +109,7 @@ if [ ! -f "/local/.kernel_done" ]; then
     # Step 1.5: Configure tuned for core isolation (core 2–55)
     ################################################################################
     step_log "Installing tuned and configuring for CPU isolation (core 2–55)"
-    sudo apt-get install -y tuned
+    apt_get_retry install tuned
 
     sudo ln -sf /boot/grub/grub.cfg /etc/grub2.cfg
 
@@ -143,7 +148,7 @@ if [ -f "/local/.kernel_done" ] && [ -f "/local/.rebooted" ] && [ ! -f "/local/.
 
     cd "${USER_HOME}"
     if [ ! -d "fake_tsc" ]; then
-        git clone "${tsc_link}" fake_tsc
+        git_clone_retry "${tsc_link}" "${USER_HOME}/fake_tsc"
     fi
     cd fake_tsc
 
@@ -173,7 +178,7 @@ if [ -f "/local/.kernel_done" ] && [ -f "/local/.rebooted" ] && [ ! -f "/local/.
     sudo ./init
     sudo ./init
     step_log "Re-loading KVM modules"
-    sudo apt-get install -yqq libsctp-dev lksctp-tools  zlib1g-dev
+    apt_get_retry install -qq libsctp-dev lksctp-tools zlib1g-dev
     sudo modprobe sctp
     step_log "fake_tsc module inserted"
     sudo lsmod | grep custom_tsc || echo "⚠️ Warning: custom_tsc not in lsmod"
@@ -194,15 +199,16 @@ if [ -f "/local/.tsc_done" ] && [ ! -f "/local/.vm_setup_done" ]; then
     step_log "Installing virtualization tools and creating VM (uvt-kvm + static MAC)"
 
     # 1. Packages
-    sudo apt-get update
-    sudo apt-get install -y qemu-kvm libvirt-daemon-system libvirt-clients \
-                            bridge-utils virtinst uvtool
-    
+    apt_get_update_soft
+    apt_get_retry install qemu-kvm libvirt-daemon-system libvirt-clients \
+                          bridge-utils virtinst uvtool
+
     step_log "Changing default storage location"
     sudo /local/repository/scripts/change_storage.sh
     # 2. Sync cloud image (once per host)
     step_log "Syncing Ubuntu cloud image"
-    sudo uvt-simplestreams-libvirt sync --source https://cloud-images.ubuntu.com/daily/ release=focal arch=amd64
+    retry_cmd "sync focal cloud image" \
+        sudo uvt-simplestreams-libvirt sync --source https://cloud-images.ubuntu.com/daily/ release=focal arch=amd64
     sudo virsh net-start default
     # 3. Names & deterministic IP/MAC
     sudo virsh pool-destroy  uvtool 
@@ -454,7 +460,7 @@ if [ -f "/local/.vm_setup_done" ] && [ ! -f "/local/.net_setup_done" ]; then
     sudo /local/repository/scripts/set_ip.sh
     sleep 5
     step_log "Installing ssh pass"
-    sudo apt-get -y install sshpass
+    apt_get_retry install sshpass
     password="1997"
     SSH_OPTS="-oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null"
     step_log "create ssh keys"
@@ -494,14 +500,16 @@ if [ -f "/local/.vm_setup_done" ] && [ -f "/local/.net_setup_done" ] && [ ! -f "
     # Install sshpass if not already installed
     if ! command -v sshpass >/dev/null 2>&1; then
         step_log "Installing sshpass"
-        sudo apt-get install -y sshpass
+        apt_get_retry install sshpass
     fi
 
-    # 1. Copy the three k0s helper scripts into /tmp inside the guest
+    # 1. Copy the k0s helper scripts (and the shared retry helpers they source) into
+    #    /tmp inside the guest.
     step_log "Copying k0s install files to vm"
-    scp $SSH_OPTS /local/repository/scripts/master_install_k0.sh ubuntu@"${INTERNAL_IP}":/tmp/ 
-    scp $SSH_OPTS /local/repository/scripts/worker_install_k0.sh ubuntu@"${INTERNAL_IP}":/tmp/ 
-    scp $SSH_OPTS /local/repository/scripts/common_k0.sh ubuntu@"${INTERNAL_IP}":/tmp/ 
+    scp $SSH_OPTS /local/repository/scripts/master_install_k0.sh ubuntu@"${INTERNAL_IP}":/tmp/
+    scp $SSH_OPTS /local/repository/scripts/worker_install_k0.sh ubuntu@"${INTERNAL_IP}":/tmp/
+    scp $SSH_OPTS /local/repository/scripts/common_k0.sh ubuntu@"${INTERNAL_IP}":/tmp/
+    scp $SSH_OPTS /local/repository/scripts/retry_helpers.sh ubuntu@"${INTERNAL_IP}":/tmp/
     # 2. Worker VMs need the ubuntu private key so they can SSH back to the controller VM
     step_log "creating ssh keys"
     ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "mkdir -p /home/ubuntu/.ssh && chmod 700 /home/ubuntu/.ssh"
@@ -509,19 +517,27 @@ if [ -f "/local/.vm_setup_done" ] && [ -f "/local/.net_setup_done" ] && [ ! -f "
     step_log "checking ssh keys"
     ssh $SSH_OPTS ubuntu@${INTERNAL_IP} "ls /home/ubuntu/.ssh/"
     
-    # 3. Run the relevant install script inside the guest
+    # 3. Run the relevant install script inside the guest. A guest-side failure must
+    #    abort here so the `.k0s_in_vm_done` marker below is NOT written for a node
+    #    that never actually joined (the iteration-3 silent-failure mode).
     if [ "$INSTANCE_ID" -eq 0 ]; then
         # Controller VM
         ROLE_SCRIPT="/tmp/master_install_k0.sh"
-        ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "bash $ROLE_SCRIPT"
+        ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "bash $ROLE_SCRIPT" \
+            || { echo "❌ FATAL: master (controller) k0s install failed inside ${VM_NAME}"; exit 1; }
     else
-        # Worker VM
-        ssh  $SSH_OPTS ubuntu@${INTERNAL_IP} "sudo apt -y update && sudo apt -y install sshpass"
+        # Worker VM. Install sshpass in the guest with a lock-tolerant retry before
+        # using it for the controller key exchange.
+        ssh $SSH_OPTS ubuntu@${INTERNAL_IP} \
+            "source /tmp/retry_helpers.sh && apt_get_update_soft && apt_get_retry install sshpass" \
+            || { echo "❌ FATAL: could not install sshpass inside ${VM_NAME}"; exit 1; }
 
-        ssh  $SSH_OPTS ubuntu@${INTERNAL_IP} "sshpass -p 1997 ssh-copy-id $SSH_OPTS ubuntu@10.2.1.2"
+        ssh $SSH_OPTS ubuntu@${INTERNAL_IP} "sshpass -p 1997 ssh-copy-id $SSH_OPTS ubuntu@10.2.1.2" \
+            || { echo "❌ FATAL: guest ${VM_NAME} could not exchange keys with controller"; exit 1; }
         ROLE_SCRIPT="/tmp/worker_install_k0.sh"
         CONTROLLER_VM_IP="10.2.1.2"   # internal IP of the controller VM
-        ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "bash $ROLE_SCRIPT"
+        ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "bash $ROLE_SCRIPT" \
+            || { echo "❌ FATAL: worker k0s install/join failed inside ${VM_NAME}"; exit 1; }
     fi
     sudo gcc -pthread slotcheckerservice.c -o slotcheckerservice
     sudo cp /local/repository/scripts/slotcheckerservice.service /etc/systemd/system/slotcheckerservice.service
@@ -544,10 +560,12 @@ if [ -f "/local/.k0s_in_vm_done" ] && [ ! -f "/local/.audo_deploy_setup" ] && [ 
     step_log "Deploying the core and setting up the auto-deployment scripts"
 
     step_log "Cloning quick_deployment_tools"
-    ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" git clone --quiet "${qdt_link} ~/quick_deployment_tools"
+    ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" \
+        "source /tmp/retry_helpers.sh && git_clone_retry '${qdt_link}' /home/ubuntu/quick_deployment_tools --quiet" \
+        || { echo "❌ FATAL: could not clone quick_deployment_tools into ${VM_NAME}"; exit 1; }
 
     step_log "Setting up some dependencies required by quick_deployment_tools"
-    sudo apt install -y parallel
+    apt_get_retry install parallel
 
     step_log "Writing Chronos shell helpers to ~/.chronos"
     ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "cat > \$HOME/.chronos <<'EOF'

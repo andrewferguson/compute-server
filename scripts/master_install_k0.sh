@@ -42,7 +42,7 @@ while :; do
     sleep "$delay"
   fi
 done
-sudo k0s kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+retry_cmd "apply flannel CNI manifest" sudo k0s kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
 sudo cp /var/lib/k0s/pki/admin.conf ~/admin.conf
 cat > ~/.chronos <<'EOF'
 export KUBECONFIG=~/admin.conf
@@ -50,7 +50,8 @@ EOF
 grep -qxF '[ -f ~/.chronos ] && source ~/.chronos' ~/.bashrc || echo '[ -f ~/.chronos ] && source ~/.chronos' >> ~/.bashrc
 sudo chown $USER ~/admin.conf
 chmod g-r ~/admin.conf
-sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq && sudo chmod +x /usr/bin/yq
+download_file https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 /usr/bin/yq
+sudo chmod +x /usr/bin/yq
 echo -e '#!/bin/bash\nexec k0s kubectl "$@"' | sudo tee /usr/local/bin/kubectl > /dev/null
 sudo chmod +x /usr/local/bin/kubectl
 KUBECONFIG=~/admin.conf kubectl taint nodes ins0vm node-role.kubernetes.io/control-plane-
