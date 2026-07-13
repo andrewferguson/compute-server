@@ -21,7 +21,7 @@ k0s config create > $HOME/k0s.yaml
 sed -i 's/^    provider: kuberouter$/    provider: custom/' $HOME/k0s.yaml
 sed -i 's/^  controllerManager: {}/  controllerManager:\n    extraArgs:\n      node-monitor-grace-period: 50000s/g' $HOME/k0s.yaml
 log "configuring controller"
-sudo k0s install controller -c $HOME/k0s.yaml --enable-worker --kubelet-extra-args="--max-pods=243"
+sudo k0s install controller -c $HOME/k0s.yaml --enable-worker --kubelet-extra-args="--max-pods=243 --resolv-conf=/run/systemd/resolve/resolv.conf"
 sleep 1
 log "starting k0s"
 sudo k0s start

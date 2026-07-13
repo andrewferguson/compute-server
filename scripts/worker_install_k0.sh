@@ -43,5 +43,5 @@ LABEL_ARGS=""
 if [[ "$HOSTNAME" == "ins"* ]]; then
   LABEL_ARGS='--labels "dilated=true"'
 fi
-sudo k0s install worker --token-file  $HOME/token-file --kubelet-extra-args="--max-pods=243 --node-status-update-frequency=1s" $LABEL_ARGS >>"$LOG_FILE"
+sudo k0s install worker --token-file  $HOME/token-file --kubelet-extra-args="--max-pods=243 --node-status-update-frequency=1s --resolv-conf=/run/systemd/resolve/resolv.conf" $LABEL_ARGS >>"$LOG_FILE"
 sudo k0s start
