@@ -54,6 +54,5 @@ download_file https://github.com/mikefarah/yq/releases/latest/download/yq_linux_
 sudo chmod +x /usr/bin/yq
 echo -e '#!/bin/bash\nexec k0s kubectl "$@"' | sudo tee /usr/local/bin/kubectl > /dev/null
 sudo chmod +x /usr/local/bin/kubectl
-KUBECONFIG=~/admin.conf kubectl taint nodes ins0vm node-role.kubernetes.io/control-plane-
 #Generate and save Worker token
 log "Worker join-token written to $HOME/token-file"
