@@ -77,8 +77,8 @@ profileConfigs = ""
 # the services below. That clone occasionally fails on a transient GitHub HTTP/2
 # framing error ("curl 16 Error in the HTTP2 framing layer" / "error reading
 # section header 'shallow-info'"). When it does, every service command below
-# points at a script that does not exist, so the node is silently skipped — no
-# inner VM, no cluster join — while the experiment still reports "ready".
+# points at a script that does not exist, so the node is silently skipped -- no
+# inner VM, no cluster join -- while the experiment still reports "ready".
 #
 # ensure_repo_cmd() is the very first service on every node. It is inline (it
 # depends on nothing inside the repo), idempotent (a no-op when CloudLab's clone
