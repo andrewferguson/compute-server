@@ -109,10 +109,15 @@ download_file() {
 
 # git_clone_retry <url> <dest> [git args...] — remove any partial clone, then clone,
 # retrying within budget; die on exhaustion.
+#
+# Forces HTTP/1.1 for the transfer: the transient failure that repeatedly skips a
+# node's whole setup is GitHub's HTTP/2 framing bug ("curl 16 Error in the HTTP2
+# framing layer" / "error reading section header 'shallow-info'"), which HTTP/1.1
+# is immune to. The retry loop still covers ordinary network resets on top of this.
 _git_clone_once() {
   local url="$1" dest="$2"; shift 2
   rm -rf "$dest" 2>/dev/null || sudo rm -rf "$dest" 2>/dev/null || true
-  git clone "$@" "$url" "$dest"
+  git -c http.version=HTTP/1.1 clone "$@" "$url" "$dest"
 }
 git_clone_retry() {
   local url="$1" dest="$2"; shift 2
