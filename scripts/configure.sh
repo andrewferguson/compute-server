@@ -4,6 +4,30 @@
 exec >> /local/configuration.log
 exec 2>&1
 
+# Every node needs its experimental vlan interface (the tagged "Network" link
+# from profile.py) to reach the rest of the cluster. Emulab occasionally fails
+# to bring this up (a CloudLab L1/switch-port link flake) with no error of its
+# own, and none of the later steps check for it, so a node can silently finish
+# startup while islanded from the fabric. Check for it first, before anything
+# else runs.
+NET_CHECK_TIMEOUT=180
+echo "Checking for experimental vlan interface (timeout ${NET_CHECK_TIMEOUT}s)..."
+elapsed=0
+while true; do
+    vlan_iface=$(ip -o -4 addr show | awk '$2 ~ /^vlan/ {print $2; exit}')
+    if [ -n "$vlan_iface" ]; then
+        echo "Experimental interface up: $(ip -o -4 addr show dev "$vlan_iface")"
+        break
+    fi
+    if [ "$elapsed" -ge "$NET_CHECK_TIMEOUT" ]; then
+        echo "FATAL: no vlan* interface with an IPv4 address appeared within ${NET_CHECK_TIMEOUT}s."
+        echo "Emulab never brought up this node's experimental fabric link (likely a CloudLab L1/switch-port flake); this node cannot reach the rest of the cluster. Aborting startup."
+        exit 1
+    fi
+    sleep 5
+    elapsed=$((elapsed + 5))
+done
+
 if [ -f "/local/.rebooted" ]; then
     # Configurations that are required after rebooting
     echo "Executing after-reboot configurations"
