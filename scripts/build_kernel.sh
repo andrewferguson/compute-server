@@ -498,6 +498,11 @@ fi
 if [ -f "/local/.vm_setup_done" ] && [ -f "/local/.net_setup_done" ] && [ ! -f "/local/.qdt_cloned" ] && [ "$INSTANCE_ID" -eq 0 ]; then
     step_log "Preparing quick_deployment_tools inside the controller VM (${VM_NAME})"
 
+    # retry_helpers.sh is normally copied in by Step 5, below -- but this
+    # block now runs *before* Step 5, so it needs its own copy first.
+    scp $SSH_OPTS /local/repository/scripts/retry_helpers.sh ubuntu@"${INTERNAL_IP}":/tmp/ \
+        || { echo "❌ FATAL: could not copy retry_helpers.sh into ${VM_NAME}"; exit 1; }
+
     ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" \
         "source /tmp/retry_helpers.sh && apt_get_update_soft && apt_get_retry install parallel" \
         || { echo "❌ FATAL: could not install parallel inside ${VM_NAME}"; exit 1; }
