@@ -571,6 +571,12 @@ if [ -f "/local/.k0s_in_vm_done" ] && [ ! -f "/local/.audo_deploy_setup" ] && [ 
     ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "cat > \$HOME/.chronos <<'EOF'
 export KUBECONFIG=~/admin.conf
 
+# Ubuntu's default .bashrc defines \`alias l=\"ls -CF\"\`. Bash expands aliases
+# at parse time, so without this the \`l() {\` function definition below fails
+# with \"syntax error near unexpected token '('\" (the alias gets expanded
+# before the parser sees it as a function name).
+unalias l 2>/dev/null
+
 s() {
   helm install --values values.yaml \$1 ./\$1/
 }
@@ -595,7 +601,7 @@ pw() {
   kubectl get pods -o wide \"\$@\"
 }
 EOF
-grep -qxF '[ -f \$HOME/.chronos ] && source \$HOME/.chronos' \$HOME/.bashrc || echo '[ -f \$HOME/.chronos ] && source \$HOME/.chronos' >> \$HOME/.bashrc"
+grep -qxF '[ -f ~/.chronos ] && source ~/.chronos' \$HOME/.bashrc || echo '[ -f ~/.chronos ] && source ~/.chronos' >> \$HOME/.bashrc"
 
     touch /local/.audo_deploy_setup
 fi
