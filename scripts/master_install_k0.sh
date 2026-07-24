@@ -56,3 +56,6 @@ echo -e '#!/bin/bash\nexec k0s kubectl "$@"' | sudo tee /usr/local/bin/kubectl >
 sudo chmod +x /usr/local/bin/kubectl
 #Generate and save Worker token
 log "Worker join-token written to $HOME/token-file"
+
+log "Distributing images to the rest of the cluster"
+bash "$HOME/quick_deployment_tools/auto-deploy/download_images.sh"

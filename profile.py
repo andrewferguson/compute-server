@@ -87,11 +87,12 @@ for i in range(0,params.machineNum+1):
     node = rspec.RawPC("node" + str(i))
     node.disk_image = os
     node.addService(PG.Execute(shell="bash", command=profileConfigs + "/local/repository/scripts/configure.sh"))
-    command = "/local/repository/scripts/build_kernel.sh {} {} {} {}".format(
+    command = "/local/repository/scripts/build_kernel.sh {} {} {} {} {}".format(
     params.token,           # $1 = token
     params.githubUser,      # $2 = GitHub username
     params.machineNum+1,    # $3 = machine number
-    i)                      # $4 = instance index
+    i,                      # $4 = instance index
+    params.machinePNum)     # $5 = proxy node count
     node.addService(PG.Execute(shell="bash", command=command))
     # Fail-loud verification that this node's inner VM was created and joined k0s.
     node.addService(PG.Execute(shell="bash", command="/local/repository/scripts/verify_node.sh {}".format(i)))

@@ -30,11 +30,13 @@ GITHUB_TOKEN="$1"
 GITHUB_USERNAME="$2"
 MACHINE_NUM="$3"
 INSTANCE_ID="$4"
+MACHINE_PNUM="$5"
 
 step_log "Number of arguments: $#"
 step_log "GitHub token: $GITHUB_TOKEN"
 step_log "GitHub username: $GITHUB_USERNAME"
 step_log "Number of Machines: $MACHINE_NUM"
+step_log "Number of Proxy Machines: $MACHINE_PNUM"
 step_log "Instance ID: $INSTANCE_ID"
 
 # Shared lock-tolerant / retrying apt + download wrappers. These hard-fail loudly on
@@ -480,21 +482,56 @@ if [ -f "/local/.vm_setup_done" ] && [ ! -f "/local/.net_setup_done" ]; then
 fi
 
 ################################################################################
+# Step 5a: Clone quick_deployment_tools into the controller VM and prep it for
+# download_images.sh, before k0s itself gets installed
+################################################################################
+# Preconditions
+#   – /local/.vm_setup_done and /local/.net_setup_done exist (VM up, networked)
+#   – /local/.qdt_cloned does NOT exist
+#   – $INSTANCE_ID must be 0 (only the controller VM runs download_images.sh)
+#
+# This has to happen before k0s is installed (Step 5) because
+# master_install_k0.sh calls download_images.sh as its last step, and that
+# script lives inside this clone and needs values.yaml patched with this
+# experiment's real node counts first.
+################################################################################
+if [ -f "/local/.vm_setup_done" ] && [ -f "/local/.net_setup_done" ] && [ ! -f "/local/.qdt_cloned" ] && [ "$INSTANCE_ID" -eq 0 ]; then
+    step_log "Preparing quick_deployment_tools inside the controller VM (${VM_NAME})"
+
+    ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" \
+        "source /tmp/retry_helpers.sh && apt_get_update_soft && apt_get_retry install parallel" \
+        || { echo "❌ FATAL: could not install parallel inside ${VM_NAME}"; exit 1; }
+
+    step_log "Cloning quick_deployment_tools (branch agent)"
+    ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" \
+        "source /tmp/retry_helpers.sh && git_clone_retry '${qdt_link}' /home/ubuntu/quick_deployment_tools --quiet -b agent" \
+        || { echo "❌ FATAL: could not clone quick_deployment_tools into ${VM_NAME}"; exit 1; }
+
+    step_log "Syncing values.yaml node counts to this experiment's real topology"
+    ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" \
+        "sed -i'' -E 's/^(numberGNBNodes:)[[:space:]]*[0-9]+/\1 $((MACHINE_NUM - 1))/' /home/ubuntu/quick_deployment_tools/auto-deploy/values.yaml && sed -i'' -E 's/^(numberProxyNodes:)[[:space:]]*[0-9]+/\1 ${MACHINE_PNUM}/' /home/ubuntu/quick_deployment_tools/auto-deploy/values.yaml" \
+        || { echo "❌ FATAL: could not patch values.yaml node counts inside ${VM_NAME}"; exit 1; }
+
+    step_log "Copying the shared experiment SSH key into the controller VM"
+    scp $SSH_OPTS "${HOME}/.ssh/id_rsa" ubuntu@"${INTERNAL_IP}":/home/ubuntu/.ssh/experiment_key \
+        || { echo "❌ FATAL: could not copy experiment key into ${VM_NAME}"; exit 1; }
+    ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "chmod 600 /home/ubuntu/.ssh/experiment_key" \
+        || { echo "❌ FATAL: could not chmod experiment key inside ${VM_NAME}"; exit 1; }
+
+    touch /local/.qdt_cloned
+fi
+
+################################################################################
 # Step 5: Install k0s inside the VM
 ################################################################################
 # Preconditions
 #   – /local/.vm_setup_done exists   (the VM has been created and given a fixed IP)
 #   – /local/.k0s_in_vm_done does NOT exist  (k0s has not yet been installed inside the VM)
-################################################################################
-################################################################################
-# Step 5: Install k0s inside the VM
-################################################################################
-# Preconditions
-#   – /local/.vm_setup_done exists   (the VM has been created and given a fixed IP)
-#   – /local/.k0s_in_vm_done does NOT exist  (k0s has not yet been installed inside the VM)
+#   – for the controller only, /local/.qdt_cloned must already exist (Step 5a)
 ################################################################################
 
-if [ -f "/local/.vm_setup_done" ] && [ -f "/local/.net_setup_done" ] && [ ! -f "/local/.k0s_in_vm_done" ]; then
+if [ -f "/local/.vm_setup_done" ] && [ -f "/local/.net_setup_done" ] && [ ! -f "/local/.k0s_in_vm_done" ] \
+    && ( [ "$INSTANCE_ID" -ne 0 ] || [ -f "/local/.qdt_cloned" ] ); then
     step_log "Installing k0s inside VM ${VM_NAME} (${INTERNAL_IP})"
 
     # Install sshpass if not already installed
@@ -559,13 +596,9 @@ fi
 if [ -f "/local/.k0s_in_vm_done" ] && [ ! -f "/local/.audo_deploy_setup" ] && [ "$INSTANCE_ID" -eq 0 ]; then
     step_log "Deploying the core and setting up the auto-deployment scripts"
 
-    step_log "Cloning quick_deployment_tools"
-    ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" \
-        "source /tmp/retry_helpers.sh && git_clone_retry '${qdt_link}' /home/ubuntu/quick_deployment_tools --quiet" \
-        || { echo "❌ FATAL: could not clone quick_deployment_tools into ${VM_NAME}"; exit 1; }
-
-    step_log "Setting up some dependencies required by quick_deployment_tools"
-    apt_get_retry install parallel
+    # quick_deployment_tools + parallel are already set up by Step 5a, above,
+    # so that download_images.sh (run from inside master_install_k0.sh, as
+    # part of Step 5) has them available before k0s is even installed.
 
     step_log "Writing Chronos shell helpers to ~/.chronos"
     ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "cat > \$HOME/.chronos <<'EOF'

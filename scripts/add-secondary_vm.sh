@@ -41,9 +41,11 @@ fi
 IFS='.' read -r o1 o2 o3 o4 <<< "$IP_ADDR"
 GATEWAY="10.2.$o3.1"
 
-# Destination route
-DEST="10.2.0.0/16"
-
-# Add route
-echo "Adding route to $DEST via $GATEWAY on $IFACE"
-sudo ip route add "$DEST" via "$GATEWAY" dev "$IFACE"
+# Add routes to the other experiment subnets: other inner VMs (10.2.0.0/16),
+# proxy nodes (10.3.0.0/16), and the globalsc node (10.4.0.0/16). Without
+# these, this VM can only ever reach its own outer node's bridge -- needed so
+# the controller VM can SSH out to proxy-*/globalsc to distribute images.
+for DEST in "10.2.0.0/16" "10.3.0.0/16" "10.4.0.0/16"; do
+  echo "Adding route to $DEST via $GATEWAY on $IFACE"
+  sudo ip route add "$DEST" via "$GATEWAY" dev "$IFACE"
+done
