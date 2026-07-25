@@ -25,7 +25,20 @@ sudo k0s install controller -c $HOME/k0s.yaml --enable-worker --kubelet-extra-ar
 sleep 1
 log "starting k0s"
 sudo k0s start
-sudo chmod 644 /run/k0s/k0s.yaml
+
+# `k0s start` just kicks off the systemd unit and returns before
+# /run/k0s/k0s.yaml is necessarily written, so wait for it (with a timeout)
+# instead of assuming it's already there -- chmod'ing a file that doesn't
+# exist yet fails outright and, under `set -e`, aborted the whole script.
+for i in {1..30}; do
+  [ -f /run/k0s/k0s.yaml ] && break
+  sleep 1
+done
+if [ -f /run/k0s/k0s.yaml ]; then
+  sudo chmod 644 /run/k0s/k0s.yaml
+else
+  echo "⚠️  /run/k0s/k0s.yaml did not appear within 30s; skipping chmod (kubectl may print a permission warning)"
+fi
 
 dest=$HOME/token-file   # final location
 delay=5                        # seconds between attempts
