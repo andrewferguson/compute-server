@@ -25,6 +25,7 @@ sudo k0s install controller -c $HOME/k0s.yaml --enable-worker --kubelet-extra-ar
 sleep 1
 log "starting k0s"
 sudo k0s start
+sudo chmod 644 /run/k0s/k0s.yaml
 
 dest=$HOME/token-file   # final location
 delay=5                        # seconds between attempts
