@@ -46,17 +46,35 @@ ssh ${SSH_OPTS} ubuntu@"${INTERNAL_IP}" "systemctl is-active ${SVC}" 2>/dev/null
 log "${SVC} active inside guest ✓"
 
 # 4. Authoritative: the controller must report this node Ready within the budget.
-#    `kubectl wait` blocks until the condition holds and returns non-zero on
-#    timeout, so it is both the bounded wait and the pass/fail gate. The controller
-#    VM queries itself; worker VMs query the controller over the passwordless SSH
-#    channel established during build_kernel.sh.
 WAIT="sudo k0s kubectl wait --for=condition=Ready node/${NODE_NAME} --timeout=${VERIFY_READY_TIMEOUT}s"
 if [ "${INSTANCE_ID}" -eq 0 ]; then
     ssh ${SSH_OPTS} ubuntu@"${INTERNAL_IP}" "${WAIT}" \
         || fail "controller did not become Ready within ${VERIFY_READY_TIMEOUT}s"
 else
+    deadline=$((SECONDS + VERIFY_READY_TIMEOUT))
+    while true; do
+        remaining=$((deadline - SECONDS))
+        [ "${remaining}" -gt 0 ] || fail "controller never observed ${NODE_NAME} register within ${VERIFY_READY_TIMEOUT}s"
+
+        if out=$(ssh ${SSH_OPTS} ubuntu@"${INTERNAL_IP}" \
+            "ssh ${SSH_OPTS} ubuntu@${CONTROLLER_IP} 'sudo k0s kubectl get node ${NODE_NAME} -o name'" 2>&1); then
+            break
+        fi
+
+        if grep -q 'NotFound' <<<"${out}"; then
+            sleep 5
+            continue
+        fi
+
+        fail "could not query controller for ${NODE_NAME}: ${out}"
+    done
+    log "controller observed ${NODE_NAME} register ✓"
+
+    remaining=$((deadline - SECONDS))
+    [ "${remaining}" -gt 0 ] || fail "controller observed ${NODE_NAME} register but it did not become Ready within ${VERIFY_READY_TIMEOUT}s"
+    WAIT="sudo k0s kubectl wait --for=condition=Ready node/${NODE_NAME} --timeout=${remaining}s"
     ssh ${SSH_OPTS} ubuntu@"${INTERNAL_IP}" "ssh ${SSH_OPTS} ubuntu@${CONTROLLER_IP} '${WAIT}'" \
-        || fail "controller never reported ${NODE_NAME} Ready within ${VERIFY_READY_TIMEOUT}s"
+        || fail "controller observed ${NODE_NAME} register but it did not become Ready within ${VERIFY_READY_TIMEOUT}s"
 fi
 log "controller reports ${NODE_NAME} Ready ✓"
 
