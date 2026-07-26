@@ -25,6 +25,10 @@ SSH_OPTS="-oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oConnectTim
 fail() { echo "❌ FATAL(verify ${VM_NAME}): $*" >&2; exit 1; }
 log()  { echo "[verify ${VM_NAME}] $*"; }
 
+is_retryable_controller_transport_error() {
+    grep -Eqi 'kex_exchange_identification|Connection reset by peer|Connection refused|Connection timed out|Operation timed out|No route to host|Connection closed by remote host|Broken pipe' <<<"${1}"
+}
+
 # 1. The inner VM must exist and be running.
 sudo virsh list --state-running --name 2>/dev/null | grep -qx "${VM_NAME}" \
     || fail "domain is not in running state (virsh)"
@@ -66,15 +70,34 @@ else
             continue
         fi
 
+        if is_retryable_controller_transport_error "${out}"; then
+            sleep 5
+            continue
+        fi
+
         fail "could not query controller for ${NODE_NAME}: ${out}"
     done
     log "controller observed ${NODE_NAME} register ✓"
 
     remaining=$((deadline - SECONDS))
     [ "${remaining}" -gt 0 ] || fail "controller observed ${NODE_NAME} register but it did not become Ready within ${VERIFY_READY_TIMEOUT}s"
-    WAIT="sudo k0s kubectl wait --for=condition=Ready node/${NODE_NAME} --timeout=${remaining}s"
-    ssh ${SSH_OPTS} ubuntu@"${INTERNAL_IP}" "ssh ${SSH_OPTS} ubuntu@${CONTROLLER_IP} '${WAIT}'" \
-        || fail "controller observed ${NODE_NAME} register but it did not become Ready within ${VERIFY_READY_TIMEOUT}s"
+    while true; do
+        remaining=$((deadline - SECONDS))
+        [ "${remaining}" -gt 0 ] || fail "controller observed ${NODE_NAME} register but it did not become Ready within ${VERIFY_READY_TIMEOUT}s"
+
+        WAIT="sudo k0s kubectl wait --for=condition=Ready node/${NODE_NAME} --timeout=${remaining}s"
+        if out=$(ssh ${SSH_OPTS} ubuntu@"${INTERNAL_IP}" \
+            "ssh ${SSH_OPTS} ubuntu@${CONTROLLER_IP} '${WAIT}'" 2>&1); then
+            break
+        fi
+
+        if is_retryable_controller_transport_error "${out}"; then
+            sleep 5
+            continue
+        fi
+
+        fail "controller observed ${NODE_NAME} register but readiness check failed: ${out}"
+    done
 fi
 log "controller reports ${NODE_NAME} Ready ✓"
 
