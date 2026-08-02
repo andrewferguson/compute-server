@@ -2,10 +2,39 @@
 # Usage: sudo ./worker_install_k0s.sh <controller_ip>
 set -euo pipefail
 LOG_FILE="$HOME/k0s_worker.log"
+EXPECTED_HOSTNAME="${EXPECTED_HOSTNAME:-}"
 if [ ! -f "/tmp/common_k0.sh" ]; then
   cp /local/repository/scripts/common_k0.sh /tmp/common_k0.sh
 fi
 source /tmp/common_k0.sh
+
+set_expected_hostname() {
+  sudo hostnamectl hostname "${EXPECTED_HOSTNAME}"
+  sudo hostname "${EXPECTED_HOSTNAME}"
+}
+
+hostname_is_settled() {
+  local transient_hostname
+  transient_hostname="$(hostnamectl --transient 2>/dev/null || true)"
+
+  [ "$(hostname)" = "${EXPECTED_HOSTNAME}" ] \
+    && [ "$(hostnamectl --static)" = "${EXPECTED_HOSTNAME}" ] \
+    && { [ -z "${transient_hostname}" ] || [ "${transient_hostname}" = "${EXPECTED_HOSTNAME}" ]; }
+}
+
+ensure_expected_hostname() {
+  if [ -z "${EXPECTED_HOSTNAME}" ]; then
+    return 0
+  fi
+
+  until set_expected_hostname && hostname_is_settled
+  do
+    echo "Failed to settle hostname as ${EXPECTED_HOSTNAME}..."
+    sleep "$delay"
+  done
+
+  echo "Hostname settled as $(hostname)"
+}
 
 install_deps
 install_k0s
@@ -43,5 +72,6 @@ LABEL_ARGS=""
 if [[ "$HOSTNAME" == "ins"* ]]; then
   LABEL_ARGS='--labels "dilated=true"'
 fi
+ensure_expected_hostname
 sudo k0s install worker --token-file  $HOME/token-file --kubelet-extra-args="--max-pods=243 --node-status-update-frequency=1s --resolv-conf=/run/systemd/resolve/resolv.conf" $LABEL_ARGS >>"$LOG_FILE"
 sudo k0s start
