@@ -22,12 +22,10 @@ SSH_OPTS="-oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oConnectTim
 # How long to wait for the node to report Ready (CNI/kubelet registration lag).
 : "${VERIFY_READY_TIMEOUT:=300}"
 
+source /local/repository/scripts/retry_helpers.sh
+
 fail() { echo "❌ FATAL(verify ${VM_NAME}): $*" >&2; exit 1; }
 log()  { echo "[verify ${VM_NAME}] $*"; }
-
-is_retryable_controller_transport_error() {
-    grep -Eqi 'kex_exchange_identification|Connection reset by peer|Connection refused|Connection timed out|Operation timed out|No route to host|Connection closed by remote host|Broken pipe' <<<"${1}"
-}
 
 # 1. The inner VM must exist and be running.
 sudo virsh list --state-running --name 2>/dev/null | grep -qx "${VM_NAME}" \

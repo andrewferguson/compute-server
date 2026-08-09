@@ -43,29 +43,62 @@ remote="ubuntu@10.2.1.2:~/token-file"
 target="$HOME/token-file"         # where we want it locally
 delay=5                           # seconds to wait between tries
 
+is_token_file_not_ready_error() {
+  grep -Fqi 'scp: /home/ubuntu/token-file: No such file or directory' <<<"${1}"
+}
+
+retry_cmd_until_token_file_ready() {
+  local deadline=$(( $(date +%s) + RETRY_BUDGET_SECS ))
+  local ssh_copy_output=""
+  local scp_output=""
+
+  while :; do
+    [[ -f $target ]] && {
+      echo "✓ $target is present; done."
+      return 0
+    }
+
+    echo "Attempting to copy token-file..."
+    if ssh_copy_output=$(sshpass -p 1997 ssh-copy-id -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null ubuntu@10.2.1.2 2>&1); then
+      :
+    elif is_retryable_controller_transport_error "${ssh_copy_output}"; then
+      if [ "$(date +%s)" -ge "${deadline}" ]; then
+        _retry_log "controller key exchange last error: ${ssh_copy_output}"
+        _retry_die "worker controller key exchange"
+      fi
+      _retry_log "transient controller SSH failure during key exchange; retrying in ${delay}s"
+      sleep "${delay}"
+      continue
+    else
+      echo "${ssh_copy_output}" >&2
+      fail "could not exchange keys with k8s control node"
+    fi
+
+    if scp_output=$(scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$remote" "$target" 2>&1); then
+      echo "✓ Copy succeeded."
+      return 0
+    fi
+
+    if is_retryable_controller_transport_error "${scp_output}" || is_token_file_not_ready_error "${scp_output}"; then
+      if [ "$(date +%s)" -ge "${deadline}" ]; then
+        _retry_log "token fetch last error: ${scp_output}"
+        _retry_die "fetch worker token-file"
+      fi
+      _retry_log "token file not ready or transient controller SSH failure; retrying in ${delay}s"
+      sleep "${delay}"
+      continue
+    fi
+
+    echo "${scp_output}" >&2
+    fail "could not fetch worker token-file"
+  done
+}
+
 # Delete the token file if it already exists
 # (can happen if the script has been run before and failed)
 [[ -f $target ]] && rm $target
 
-# Infinite for-loop: for (;;);
-for (( ; ; )); do
-  [[ -f $target ]] && {            # stop if we already have it
-    echo "✓ $target is present; done."
-    break
-  }
-
-  echo "Attempting to copy token-file..."
-  sshpass -p 1997 ssh-copy-id -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null ubuntu@10.2.1.2 || {
-    echo "Unable to ssh to k8s control node..."
-  }
-  scp  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$remote" "$target" && {
-    echo "✓ Copy succeeded."
-    break
-  }
-
-  echo "⚠️  Copy failed or file not yet available; retrying in $delay s..."
-  sleep "$delay"
-done
+retry_cmd_until_token_file_ready
 
 log "Joining cluster with token"
 LABEL_ARGS=""

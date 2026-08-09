@@ -568,14 +568,6 @@ if [ -f "/local/.vm_setup_done" ] && [ -f "/local/.net_setup_done" ] && [ ! -f "
         ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "bash $ROLE_SCRIPT" \
             || { echo "❌ FATAL: master (controller) k0s install failed inside ${VM_NAME}"; exit 1; }
     else
-        # Worker VM. Install sshpass in the guest with a lock-tolerant retry before
-        # using it for the controller key exchange.
-        ssh $SSH_OPTS ubuntu@${INTERNAL_IP} \
-            "source /tmp/retry_helpers.sh && apt_get_update_soft && apt_get_retry install sshpass" \
-            || { echo "❌ FATAL: could not install sshpass inside ${VM_NAME}"; exit 1; }
-
-        ssh $SSH_OPTS ubuntu@${INTERNAL_IP} "sshpass -p 1997 ssh-copy-id $SSH_OPTS ubuntu@10.2.1.2" \
-            || { echo "❌ FATAL: guest ${VM_NAME} could not exchange keys with controller"; exit 1; }
         ROLE_SCRIPT="/tmp/worker_install_k0.sh"
         CONTROLLER_VM_IP="10.2.1.2"   # internal IP of the controller VM
         ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "bash $ROLE_SCRIPT" \

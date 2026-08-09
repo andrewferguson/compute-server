@@ -36,6 +36,10 @@ __CHRONOS_RETRY_HELPERS_SOURCED=1
 
 _retry_log() { echo "[retry $(date '+%H:%M:%S')] $*" >&2; }
 
+is_retryable_controller_transport_error() {
+  grep -Eqi 'kex_exchange_identification|Connection reset by peer|Connection refused|Connection timed out|Operation timed out|No route to host|Connection closed by remote host|Broken pipe' <<<"${1}"
+}
+
 _retry_die() {
   _retry_log "FATAL: giving up on: $* (exhausted ${RETRY_BUDGET_SECS}s budget)"
   exit 1
