@@ -23,7 +23,7 @@ else
 fi
 
 # Packages every k0s node needs. install_deps verifies each is actually present.
-K0S_REQUIRED_PKGS="curl conntrack socat ebtables iptables iputils-ping nano iperf3 libsctp-dev lksctp-tools zlib1g-dev sshpass"
+K0S_REQUIRED_PKGS="curl conntrack socat ebtables iptables iputils-ping nano iperf3 libsctp-dev lksctp-tools zlib1g-dev"
 
 log()  { echo -e "[\e[34mINFO\e[0m] $*"; }
 fail() { echo -e "[\e[31mFAIL\e[0m] $*"; exit 1; }
@@ -59,5 +59,4 @@ install_k0s() {
     "curl -L --connect-timeout ${DOWNLOAD_CONNECT_TIMEOUT} --max-time ${DOWNLOAD_ATTEMPT_TIMEOUT} https://github.com/containernetworking/plugins/releases/download/v1.4.0/cni-plugins-linux-amd64-v1.4.0.tgz | sudo tar -xz -C /opt/cni/bin"
   sudo test -x /opt/cni/bin/bridge || _retry_die "cni plugins missing after extract"
 }
-
 

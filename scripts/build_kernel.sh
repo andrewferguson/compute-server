@@ -59,6 +59,7 @@ INTERNAL_IP="10.2.${INTERNAL_SUBNET}.2"
 NET_GW_IP="10.2.${INTERNAL_SUBNET}.1"
 RANGE_START="10.2.${INTERNAL_SUBNET}.2"
 RANGE_END="10.2.${INTERNAL_SUBNET}.254"
+SSH_OPTS="-oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null"
 
 ################################################################################
 # Step 1: Kernel Build
@@ -230,11 +231,38 @@ if [ -f "/local/.tsc_done" ] && [ ! -f "/local/.vm_setup_done" ]; then
     step_log "VM  = ${VM_NAME}"
     step_log "Int = ${INTERNAL_IP}"
 
+    step_log "Materializing the shared experiment SSH key before VM creation"
+    mkdir -p "${HOME}/.ssh"
+    chmod 700 "${HOME}/.ssh"
+    geni-get key > "${HOME}/.ssh/id_rsa"
+    chmod 600 "${HOME}/.ssh/id_rsa"
+    ssh-keygen -y -f "${HOME}/.ssh/id_rsa" > "${HOME}/.ssh/id_rsa.pub"
+    grep -q -f "${HOME}/.ssh/id_rsa.pub" "${HOME}/.ssh/authorized_keys" || cat "${HOME}/.ssh/id_rsa.pub" >> "${HOME}/.ssh/authorized_keys"
+
     # 4. Create VM (uvt-kvm, DHCP )
     if ! sudo uvt-kvm create "${VM_NAME}" \
             release=focal arch=amd64 \
-            --cpu 51 --memory 114096 --password 1997 --disk 200; then
+            --cpu 51 --memory 114096 --password chronos \
+            --ssh-public-key-file "${HOME}/.ssh/id_rsa.pub" --disk 200; then
         echo "❌ uvt-kvm create failed, aborting"; exit 1
+    fi
+
+    step_log "Waiting for ${VM_NAME} to accept key-based SSH before VM patch/restart"
+    initial_guest_ip=""
+    for i in {1..30}; do
+        guest_ip_list=$(sudo virsh domifaddr "${VM_NAME}" 2>/dev/null | awk '/ipv4/ {print $4}' | cut -d/ -f1)
+        for guest_ip in $guest_ip_list; do
+            if ssh ${SSH_OPTS} -oConnectTimeout=10 ubuntu@"${guest_ip}" true 2>/dev/null; then
+                initial_guest_ip="${guest_ip}"
+                break 2
+            fi
+        done
+        sleep 2
+    done
+
+    if [ -z "${initial_guest_ip}" ]; then
+        echo "❌ ${VM_NAME} never accepted key-based SSH after creation, aborting"
+        exit 1
     fi
 
      step_log "Modifying /etc/libvirt/qemu/$VM_NAME.xml to patch CPU and clock settings"
@@ -461,17 +489,7 @@ if [ -f "/local/.vm_setup_done" ] && [ ! -f "/local/.net_setup_done" ]; then
     step_log "Adding IP TABLES"
     sudo /local/repository/scripts/set_ip.sh
     sleep 5
-    step_log "Installing ssh pass"
-    apt_get_retry install sshpass
-    password="1997"
-    SSH_OPTS="-oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null"
-    step_log "create ssh keys"
-    geni-get key > ${HOME}/.ssh/id_rsa
-    chmod 600 ${HOME}/.ssh/id_rsa
-    ssh-keygen -y -f ${HOME}/.ssh/id_rsa > ${HOME}/.ssh/id_rsa.pub
-    grep -q -f ${HOME}/.ssh/id_rsa.pub ${HOME}/.ssh/authorized_keys || cat ${HOME}/.ssh/id_rsa.pub >> ${HOME}/.ssh/authorized_keys
-    step_log "Copying ssh keys"
-    sshpass -p $password ssh-copy-id $SSH_OPTS ubuntu@${INTERNAL_IP}
+    step_log "Using the injected experiment key for guest bootstrap"
 
     step_log "Copying script to add ip address"
     scp $SSH_OPTS /local/repository/scripts/add-secondary_vm.sh ubuntu@${INTERNAL_IP}:~/
@@ -539,12 +557,6 @@ if [ -f "/local/.vm_setup_done" ] && [ -f "/local/.net_setup_done" ] && [ ! -f "
     && ( [ "$INSTANCE_ID" -ne 0 ] || [ -f "/local/.qdt_cloned" ] ); then
     step_log "Installing k0s inside VM ${VM_NAME} (${INTERNAL_IP})"
 
-    # Install sshpass if not already installed
-    if ! command -v sshpass >/dev/null 2>&1; then
-        step_log "Installing sshpass"
-        apt_get_retry install sshpass
-    fi
-
     # 1. Copy the k0s helper scripts (and the shared retry helpers they source) into
     #    /tmp inside the guest.
     step_log "Copying k0s install files to vm"
@@ -552,12 +564,11 @@ if [ -f "/local/.vm_setup_done" ] && [ -f "/local/.net_setup_done" ] && [ ! -f "
     scp $SSH_OPTS /local/repository/scripts/worker_install_k0.sh ubuntu@"${INTERNAL_IP}":/tmp/
     scp $SSH_OPTS /local/repository/scripts/common_k0.sh ubuntu@"${INTERNAL_IP}":/tmp/
     scp $SSH_OPTS /local/repository/scripts/retry_helpers.sh ubuntu@"${INTERNAL_IP}":/tmp/
-    # 2. Worker VMs need the ubuntu private key so they can SSH back to the controller VM
-    step_log "creating ssh keys"
+    step_log "Copying shared experiment key into the guest default identity path"
     ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "mkdir -p /home/ubuntu/.ssh && chmod 700 /home/ubuntu/.ssh"
-    ssh $SSH_OPTS ubuntu@${INTERNAL_IP} "ssh-keygen -q -t rsa -N '' -f /home/ubuntu/.ssh/id_rsa"
-    step_log "checking ssh keys"
-    ssh $SSH_OPTS ubuntu@${INTERNAL_IP} "ls /home/ubuntu/.ssh/"
+    scp $SSH_OPTS "${HOME}/.ssh/id_rsa" ubuntu@"${INTERNAL_IP}":/home/ubuntu/.ssh/id_rsa
+    scp $SSH_OPTS "${HOME}/.ssh/id_rsa.pub" ubuntu@"${INTERNAL_IP}":/home/ubuntu/.ssh/id_rsa.pub
+    ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "chmod 600 /home/ubuntu/.ssh/id_rsa && chmod 644 /home/ubuntu/.ssh/id_rsa.pub"
     
     # 3. Run the relevant install script inside the guest. A guest-side failure must
     #    abort here so the `.k0s_in_vm_done` marker below is NOT written for a node

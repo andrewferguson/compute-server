@@ -42,6 +42,7 @@ install_k0s
 remote="ubuntu@10.2.1.2:~/token-file"
 target="$HOME/token-file"         # where we want it locally
 delay=5                           # seconds to wait between tries
+SCP_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 
 is_token_file_not_ready_error() {
   grep -Fqi 'scp: /home/ubuntu/token-file: No such file or directory' <<<"${1}"
@@ -49,7 +50,6 @@ is_token_file_not_ready_error() {
 
 retry_cmd_until_token_file_ready() {
   local deadline=$(( $(date +%s) + RETRY_BUDGET_SECS ))
-  local ssh_copy_output=""
   local scp_output=""
 
   while :; do
@@ -59,22 +59,7 @@ retry_cmd_until_token_file_ready() {
     }
 
     echo "Attempting to copy token-file..."
-    if ssh_copy_output=$(sshpass -p 1997 ssh-copy-id -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null ubuntu@10.2.1.2 2>&1); then
-      :
-    elif is_retryable_controller_transport_error "${ssh_copy_output}"; then
-      if [ "$(date +%s)" -ge "${deadline}" ]; then
-        _retry_log "controller key exchange last error: ${ssh_copy_output}"
-        _retry_die "worker controller key exchange"
-      fi
-      _retry_log "transient controller SSH failure during key exchange; retrying in ${delay}s"
-      sleep "${delay}"
-      continue
-    else
-      echo "${ssh_copy_output}" >&2
-      fail "could not exchange keys with k8s control node"
-    fi
-
-    if scp_output=$(scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$remote" "$target" 2>&1); then
+    if scp_output=$(scp ${SCP_OPTS} "$remote" "$target" 2>&1); then
       echo "✓ Copy succeeded."
       return 0
     fi
@@ -90,7 +75,7 @@ retry_cmd_until_token_file_ready() {
     fi
 
     echo "${scp_output}" >&2
-    fail "could not fetch worker token-file"
+    fail "could not fetch worker token-file with the shared experiment key"
   done
 }
 

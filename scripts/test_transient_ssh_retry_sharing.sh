@@ -12,5 +12,4 @@ grep -qF 'is_retryable_controller_transport_error()' "${RETRY_HELPERS_SCRIPT}"
 grep -qF 'source /local/repository/scripts/retry_helpers.sh' "${VERIFY_SCRIPT}"
 grep -qF 'is_retryable_controller_transport_error "${out}"' "${VERIFY_SCRIPT}"
 
-grep -qF 'is_retryable_controller_transport_error "${ssh_copy_output}"' "${WORKER_SCRIPT}"
 grep -qF 'is_retryable_controller_transport_error "${scp_output}"' "${WORKER_SCRIPT}"
