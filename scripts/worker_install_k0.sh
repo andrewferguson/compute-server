@@ -3,6 +3,7 @@
 set -euo pipefail
 LOG_FILE="$HOME/k0s_worker.log"
 EXPECTED_HOSTNAME="${EXPECTED_HOSTNAME:-}"
+: "${RETRY_BUDGET_SECS:=3600}"
 if [ ! -f "/tmp/common_k0.sh" ]; then
   cp /local/repository/scripts/common_k0.sh /tmp/common_k0.sh
 fi

@@ -20,6 +20,7 @@ grep -qF 'scp $SSH_OPTS "${HOME}/.ssh/id_rsa" ubuntu@"${INTERNAL_IP}":/home/ubun
 grep -qF 'install_deps' "${WORKER_SCRIPT}"
 grep -qF 'install_k0s' "${WORKER_SCRIPT}"
 grep -qF 'retry_cmd_until_token_file_ready' "${WORKER_SCRIPT}"
+grep -qF ': "${RETRY_BUDGET_SECS:=3600}"' "${WORKER_SCRIPT}"
 ! grep -qF 'sshpass' "${WORKER_SCRIPT}"
 ! grep -qF 'ssh-copy-id' "${WORKER_SCRIPT}"
 grep -qF 'scp ${SCP_OPTS} "$remote" "$target"' "${WORKER_SCRIPT}"
