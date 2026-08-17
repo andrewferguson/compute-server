@@ -447,6 +447,21 @@ sudo sed -i "/<vcpu placement='static'>51<\/vcpu>/r /dev/stdin" "$TMP_XML" <<<"$
     done
     [[ "${cur_ip}" != "${INTERNAL_IP}" ]] && echo "⚠️  VM IP is ${cur_ip:-N/A}, expected ${INTERNAL_IP}"
 
+    step_log "Waiting for ${VM_NAME} to accept key-based SSH on ${INTERNAL_IP}"
+    final_guest_ready=""
+    for i in {1..60}; do
+        if ssh ${SSH_OPTS} -oConnectTimeout=10 ubuntu@"${INTERNAL_IP}" true 2>/dev/null; then
+            final_guest_ready=1
+            break
+        fi
+        sleep 5
+    done
+
+    if [ -z "${final_guest_ready}" ]; then
+        echo "❌ ${VM_NAME} never accepted key-based SSH on ${INTERNAL_IP} after restart, aborting"
+        exit 1
+    fi
+
     # 10. Done
 #    sudo virsh net-destory default
 #    sleep 2
@@ -492,10 +507,12 @@ if [ -f "/local/.vm_setup_done" ] && [ ! -f "/local/.net_setup_done" ]; then
     step_log "Using the injected experiment key for guest bootstrap"
 
     step_log "Copying script to add ip address"
-    scp $SSH_OPTS /local/repository/scripts/add-secondary_vm.sh ubuntu@${INTERNAL_IP}:~/
+    scp $SSH_OPTS /local/repository/scripts/add-secondary_vm.sh ubuntu@${INTERNAL_IP}:~/ \
+        || { echo "❌ FATAL: could not copy add-secondary_vm.sh into ${VM_NAME}"; exit 1; }
     step_log "calling copied script"
 
-    ssh $SSH_OPTS ubuntu@${INTERNAL_IP}  "sudo /home/ubuntu/add-secondary_vm.sh"
+    ssh $SSH_OPTS ubuntu@${INTERNAL_IP}  "sudo /home/ubuntu/add-secondary_vm.sh" \
+        || { echo "❌ FATAL: could not run add-secondary_vm.sh inside ${VM_NAME}"; exit 1; }
     touch /local/.net_setup_done
 fi
 
