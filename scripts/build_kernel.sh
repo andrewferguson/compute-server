@@ -249,7 +249,7 @@ if [ -f "/local/.tsc_done" ] && [ ! -f "/local/.vm_setup_done" ]; then
 
     step_log "Waiting for ${VM_NAME} to accept key-based SSH before VM patch/restart"
     initial_guest_ip=""
-    for i in {1..30}; do
+    for i in {1..120}; do
         guest_ip_list=$(sudo virsh domifaddr "${VM_NAME}" 2>/dev/null | awk '/ipv4/ {print $4}' | cut -d/ -f1)
         for guest_ip in $guest_ip_list; do
             if ssh ${SSH_OPTS} -oConnectTimeout=10 ubuntu@"${guest_ip}" true 2>/dev/null; then
@@ -257,7 +257,7 @@ if [ -f "/local/.tsc_done" ] && [ ! -f "/local/.vm_setup_done" ]; then
                 break 2
             fi
         done
-        sleep 2
+        sleep 5
     done
 
     if [ -z "${initial_guest_ip}" ]; then
