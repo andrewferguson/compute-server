@@ -272,7 +272,7 @@ if [ -f "/local/.tsc_done" ] && [ ! -f "/local/.vm_setup_done" ]; then
     fi
 
     step_log "Ensuring persistent SSH host keys exist inside ${VM_NAME} before VM restart"
-    if ! ssh ${SSH_OPTS} -oConnectTimeout=10 ubuntu@"${initial_guest_ip}" "sudo sh -lc 'for key in /etc/ssh/ssh_host_*_key /etc/ssh/ssh_host_*_key.pub; do [ -e \"\$key\" ] || continue; [ -s \"\$key\" ] || rm -f \"\$key\"; done; test -s /etc/ssh/ssh_host_ed25519_key || ssh-keygen -A; systemctl restart ssh; systemctl is-active ssh'"; then
+    if ! ssh ${SSH_OPTS} -oConnectTimeout=10 ubuntu@"${initial_guest_ip}" "sudo sh -lc 'rm -f /etc/ssh/ssh_host_*_key /etc/ssh/ssh_host_*_key.pub; ssh-keygen -A; for key in /etc/ssh/ssh_host_rsa_key /etc/ssh/ssh_host_ecdsa_key /etc/ssh/ssh_host_ed25519_key; do [ -s \"\$key\" ] || exit 1; done; sync; systemctl restart ssh; systemctl is-active ssh'"; then
         echo "❌ ${VM_NAME} could not prepare ssh host keys before VM restart, aborting"
         exit 1
     fi
