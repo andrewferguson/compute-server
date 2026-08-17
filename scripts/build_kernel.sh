@@ -271,6 +271,12 @@ if [ -f "/local/.tsc_done" ] && [ ! -f "/local/.vm_setup_done" ]; then
         exit 1
     fi
 
+    step_log "Ensuring persistent SSH host keys exist inside ${VM_NAME} before VM restart"
+    if ! ssh ${SSH_OPTS} -oConnectTimeout=10 ubuntu@"${initial_guest_ip}" "sudo test -f /etc/ssh/ssh_host_ed25519_key || sudo ssh-keygen -A; sudo systemctl restart ssh; sudo systemctl is-active ssh"; then
+        echo "❌ ${VM_NAME} could not prepare ssh host keys before VM restart, aborting"
+        exit 1
+    fi
+
      step_log "Modifying /etc/libvirt/qemu/$VM_NAME.xml to patch CPU and clock settings"
             VM_XML="/etc/libvirt/qemu/${VM_NAME}.xml"
             TMP_XML="/tmp/${VM_NAME}.xml.modified"
