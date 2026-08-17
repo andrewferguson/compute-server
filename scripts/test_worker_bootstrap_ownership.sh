@@ -13,6 +13,7 @@ COMMON_SCRIPT="${ROOT_DIR}/scripts/common_k0.sh"
 ! grep -qF 'apt_get_retry install sshpass' "${BUILD_KERNEL_SCRIPT}"
 grep -qF -- '--password chronos' "${BUILD_KERNEL_SCRIPT}"
 grep -qF -- '--ssh-public-key-file "${HOME}/.ssh/id_rsa.pub"' "${BUILD_KERNEL_SCRIPT}"
+grep -qF 'cloud-init status --wait' "${BUILD_KERNEL_SCRIPT}"
 ! grep -qF 'ssh-keygen -q -t rsa -N' "${BUILD_KERNEL_SCRIPT}"
 grep -qF 'scp $SSH_OPTS "${HOME}/.ssh/id_rsa" ubuntu@"${INTERNAL_IP}":/home/ubuntu/.ssh/id_rsa' "${BUILD_KERNEL_SCRIPT}"
 

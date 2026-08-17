@@ -265,6 +265,12 @@ if [ -f "/local/.tsc_done" ] && [ ! -f "/local/.vm_setup_done" ]; then
         exit 1
     fi
 
+    step_log "Waiting for cloud-init to finish inside ${VM_NAME} before VM restart"
+    if ! ssh ${SSH_OPTS} -oConnectTimeout=10 ubuntu@"${initial_guest_ip}" "sudo timeout 900 cloud-init status --wait"; then
+        echo "❌ ${VM_NAME} did not finish cloud-init before VM restart, aborting"
+        exit 1
+    fi
+
      step_log "Modifying /etc/libvirt/qemu/$VM_NAME.xml to patch CPU and clock settings"
             VM_XML="/etc/libvirt/qemu/${VM_NAME}.xml"
             TMP_XML="/tmp/${VM_NAME}.xml.modified"
