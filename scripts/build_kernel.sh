@@ -65,12 +65,6 @@ SSH_OPTS="-oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null"
 # Step 1: Kernel Build
 ################################################################################
 CPU_VENDOR=$(lscpu | grep "^Vendor ID:" | awk -F ' ' '{ print $3 }')
-[ "$INSTANCE_ID" -ne "0" ] && {
-  echo "Skipping custom kernel on non-controller node"
-  touch /local/.kernel_done
-  touch /local/.rebooted
-  touch /local/.tsc_done
-}
 [ "$CPU_VENDOR" != "GenuineIntel" ] && {
   echo "Not an Intel CPU"
   echo "Skipping building the custom kernel"
