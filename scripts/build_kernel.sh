@@ -43,6 +43,9 @@ step_log "Instance ID: $INSTANCE_ID"
 # exhaustion of their per-occurrence budget, which (since this script has no `set -e`)
 # aborts the script before any `.done` marker is written for a failed step.
 source /local/repository/scripts/retry_helpers.sh
+# Shared experiment-key handling (node-local key, system ssh_config, guest
+# authorized_keys set, guest password lockout).
+source /local/repository/scripts/experiment_ssh_key.sh
 
 
 USER_HOME="/users/$(whoami)"
@@ -231,51 +234,40 @@ if [ -f "/local/.tsc_done" ] && [ ! -f "/local/.vm_setup_done" ]; then
     step_log "VM  = ${VM_NAME}"
     step_log "Int = ${INTERNAL_IP}"
 
-    step_log "Materializing the shared experiment SSH key before VM creation"
-    mkdir -p "${HOME}/.ssh"
-    chmod 700 "${HOME}/.ssh"
-    geni-get key > "${HOME}/.ssh/id_rsa"
-    chmod 600 "${HOME}/.ssh/id_rsa"
-    ssh-keygen -y -f "${HOME}/.ssh/id_rsa" > "${HOME}/.ssh/id_rsa.pub"
-    grep -q -f "${HOME}/.ssh/id_rsa.pub" "${HOME}/.ssh/authorized_keys" || cat "${HOME}/.ssh/id_rsa.pub" >> "${HOME}/.ssh/authorized_keys"
+    step_log "Preparing the shared experiment SSH key before VM creation"
+    materialize_experiment_key \
+        || { echo "❌ FATAL: could not materialize the experiment SSH key"; exit 1; }
+    install_shared_experiment_key \
+        || { echo "❌ FATAL: could not install the node-local shared experiment key"; exit 1; }
+    build_guest_authorized_keys \
+        || { echo "❌ FATAL: could not build the guest authorized_keys set"; exit 1; }
 
-    # 4. Create VM (uvt-kvm, DHCP )
+    # 4. Create VM (uvt-kvm, DHCP)
+    #
+    # Deliberately no --password. Passing one makes cloud-init write
+    # /etc/ssh/sshd_config.d/50-cloud-init.conf containing
+    # "PasswordAuthentication yes", which overrides the cloud image's own
+    # "PasswordAuthentication no" in 60-cloudimg-settings.conf, because sshd
+    # takes the first value it sees across a lexically ordered sshd_config.d.
+    # The "backup" password was therefore the very thing switching password
+    # auth on. Omitting it is what actually makes the guest key-only.
     if ! sudo uvt-kvm create "${VM_NAME}" \
             release=focal arch=amd64 \
-            --cpu 51 --memory 114096 --password chronos \
-            --ssh-public-key-file "${HOME}/.ssh/id_rsa.pub" --disk 200; then
+            --cpu 51 --memory 114096 \
+            --ssh-public-key-file "${CHRONOS_GUEST_AUTH_KEYS}" --disk 200; then
         echo "❌ uvt-kvm create failed, aborting"; exit 1
     fi
 
-    step_log "Waiting for ${VM_NAME} to accept key-based SSH before VM patch/restart"
-    initial_guest_ip=""
-    for i in {1..120}; do
-        guest_ip_list=$(sudo virsh domifaddr "${VM_NAME}" 2>/dev/null | awk '/ipv4/ {print $4}' | cut -d/ -f1)
-        for guest_ip in $guest_ip_list; do
-            if ssh ${SSH_OPTS} -oConnectTimeout=10 ubuntu@"${guest_ip}" true 2>/dev/null; then
-                initial_guest_ip="${guest_ip}"
-                break 2
-            fi
-        done
-        sleep 5
-    done
-
-    if [ -z "${initial_guest_ip}" ]; then
-        echo "❌ ${VM_NAME} never accepted key-based SSH after creation, aborting"
-        exit 1
-    fi
-
-    step_log "Waiting for cloud-init to finish inside ${VM_NAME} before VM restart"
-    if ! ssh ${SSH_OPTS} -oConnectTimeout=10 ubuntu@"${initial_guest_ip}" "sudo timeout 900 cloud-init status --wait"; then
-        echo "❌ ${VM_NAME} did not finish cloud-init before VM restart, aborting"
-        exit 1
-    fi
-
-    step_log "Ensuring persistent SSH host keys exist inside ${VM_NAME} before VM restart"
-    if ! ssh ${SSH_OPTS} -oConnectTimeout=10 ubuntu@"${initial_guest_ip}" "sudo sh -lc 'rm -f /etc/ssh/ssh_host_*_key /etc/ssh/ssh_host_*_key.pub; ssh-keygen -A; for key in /etc/ssh/ssh_host_rsa_key /etc/ssh/ssh_host_ecdsa_key /etc/ssh/ssh_host_ed25519_key; do [ -s \"\$key\" ] || exit 1; done; sync; systemctl restart ssh; systemctl is-active ssh'"; then
-        echo "❌ ${VM_NAME} could not prepare ssh host keys before VM restart, aborting"
-        exit 1
-    fi
+    # uvt-kvm starts the domain immediately, using a stock CPU model that still
+    # advertises rdtscp. On a node running the custom kernel with custom_tsc.ko
+    # loaded, that guest dies about 100 seconds in with
+    #   KVM internal error. Suberror: 4 / vmx: unexpected exit reason 0x33
+    # (exit reason 51 == EXIT_REASON_RDTSCP, faulting on 0f 01 f9), and libvirt
+    # leaves the domain paused forever. Kill it before it gets anywhere, so the
+    # first real boot is the patched rdtscp-free one below and cloud-init only
+    # ever runs once, on a VM that can actually survive to the end of it.
+    step_log "Stopping ${VM_NAME} before it boots on an unpatched CPU model"
+    sudo virsh destroy "${VM_NAME}" 2>/dev/null || true
 
      step_log "Modifying /etc/libvirt/qemu/$VM_NAME.xml to patch CPU and clock settings"
             VM_XML="/etc/libvirt/qemu/${VM_NAME}.xml"
@@ -349,7 +341,7 @@ sudo sed -i "/<vcpu placement='static'>51<\/vcpu>/r /dev/stdin" "$TMP_XML" <<<"$
             sudo mv "$TMP_XML" "$VM_XML"
             sudo virsh define "$VM_XML"
 
-            sudo virsh destroy "$VM_NAME"
+            sudo virsh destroy "$VM_NAME" 2>/dev/null || true
             sudo virsh start "$VM_NAME"
 
 
@@ -473,6 +465,10 @@ sudo sed -i "/<vcpu placement='static'>51<\/vcpu>/r /dev/stdin" "$TMP_XML" <<<"$
         echo "❌ ${VM_NAME} never accepted key-based SSH on ${INTERNAL_IP} after restart, aborting"
         exit 1
     fi
+
+    step_log "Locking ${VM_NAME} to key-only SSH"
+    enforce_guest_key_only_ssh "ubuntu@${INTERNAL_IP}" \
+        || { echo "❌ FATAL: ${VM_NAME} still accepts SSH password authentication"; exit 1; }
 
     # 10. Done
 #    sudo virsh net-destory default
