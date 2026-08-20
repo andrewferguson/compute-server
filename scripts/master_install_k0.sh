@@ -72,4 +72,4 @@ sudo chmod +x /usr/local/bin/kubectl
 log "Worker join-token written to $HOME/token-file"
 
 log "Distributing images to the rest of the cluster"
-bash "$HOME/quick_deployment_tools/auto-deploy/download_images.sh"
+bash "$HOME/chronos-auto-deploy/download_images.sh"

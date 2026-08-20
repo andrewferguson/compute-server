@@ -51,10 +51,10 @@ source /local/repository/scripts/experiment_ssh_key.sh
 USER_HOME="/users/$(whoami)"
 echo "Number of machines in this experiments are ${MACHINE_NUM}"
 kernel_repo="ujjwalpawar/chronos-kernel"
-qdt="netsys-edinburgh/quick_deployment_tools"
+cad="andrewferguson/chronos-auto-deploy"
 tsc_repo="ujjwalpawar/fake_tsc"
 kernel_link="https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/${kernel_repo}.git"
-qdt_link="https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/${qdt}.git"
+cad_link="https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/${cad}.git"
 tsc_link="https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/${tsc_repo}.git"
 VM_NAME="ins${INSTANCE_ID}vm"
 INTERNAL_SUBNET=$((1 +INSTANCE_ID)) # 122,123,124,…
@@ -525,12 +525,12 @@ if [ -f "/local/.vm_setup_done" ] && [ ! -f "/local/.net_setup_done" ]; then
 fi
 
 ################################################################################
-# Step 5a: Clone quick_deployment_tools into the controller VM and prep it for
+# Step 5a: Clone chronos-auto-deploy into the controller VM and prep it for
 # download_images.sh, before k0s itself gets installed
 ################################################################################
 # Preconditions
 #   – /local/.vm_setup_done and /local/.net_setup_done exist (VM up, networked)
-#   – /local/.qdt_cloned does NOT exist
+#   – /local/.cad_cloned does NOT exist
 #   – $INSTANCE_ID must be 0 (only the controller VM runs download_images.sh)
 #
 # This has to happen before k0s is installed (Step 5) because
@@ -538,8 +538,8 @@ fi
 # script lives inside this clone and needs values.yaml patched with this
 # experiment's real node counts first.
 ################################################################################
-if [ -f "/local/.vm_setup_done" ] && [ -f "/local/.net_setup_done" ] && [ ! -f "/local/.qdt_cloned" ] && [ "$INSTANCE_ID" -eq 0 ]; then
-    step_log "Preparing quick_deployment_tools inside the controller VM (${VM_NAME})"
+if [ -f "/local/.vm_setup_done" ] && [ -f "/local/.net_setup_done" ] && [ ! -f "/local/.cad_cloned" ] && [ "$INSTANCE_ID" -eq 0 ]; then
+    step_log "Preparing chronos-auto-deploy inside the controller VM (${VM_NAME})"
 
     # retry_helpers.sh is normally copied in by Step 5, below -- but this
     # block now runs *before* Step 5, so it needs its own copy first.
@@ -550,14 +550,14 @@ if [ -f "/local/.vm_setup_done" ] && [ -f "/local/.net_setup_done" ] && [ ! -f "
         "source /tmp/retry_helpers.sh && apt_get_update_soft && apt_get_retry install parallel" \
         || { echo "❌ FATAL: could not install parallel inside ${VM_NAME}"; exit 1; }
 
-    step_log "Cloning quick_deployment_tools (branch agent)"
+    step_log "Cloning chronos-auto-deploy (branch main)"
     ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" \
-        "source /tmp/retry_helpers.sh && git_clone_retry '${qdt_link}' /home/ubuntu/quick_deployment_tools --quiet -b agent" \
-        || { echo "❌ FATAL: could not clone quick_deployment_tools into ${VM_NAME}"; exit 1; }
+        "source /tmp/retry_helpers.sh && git_clone_retry '${cad_link}' /home/ubuntu/chronos-auto-deploy --quiet -b main" \
+        || { echo "❌ FATAL: could not clone chronos-auto-deploy into ${VM_NAME}"; exit 1; }
 
     step_log "Syncing values.yaml node counts to this experiment's real topology"
     ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" \
-        "sed -i'' -E 's/^(numberGNBNodes:)[[:space:]]*[0-9]+/\1 $((MACHINE_NUM - 1))/' /home/ubuntu/quick_deployment_tools/auto-deploy/values.yaml && sed -i'' -E 's/^(numberProxyNodes:)[[:space:]]*[0-9]+/\1 ${MACHINE_PNUM}/' /home/ubuntu/quick_deployment_tools/auto-deploy/values.yaml" \
+        "sed -i'' -E 's/^(numberGNBNodes:)[[:space:]]*[0-9]+/\1 $((MACHINE_NUM - 1))/' /home/ubuntu/chronos-auto-deploy/values.yaml && sed -i'' -E 's/^(numberProxyNodes:)[[:space:]]*[0-9]+/\1 ${MACHINE_PNUM}/' /home/ubuntu/chronos-auto-deploy/values.yaml" \
         || { echo "❌ FATAL: could not patch values.yaml node counts inside ${VM_NAME}"; exit 1; }
 
     step_log "Copying the shared experiment SSH key into the controller VM"
@@ -566,7 +566,7 @@ if [ -f "/local/.vm_setup_done" ] && [ -f "/local/.net_setup_done" ] && [ ! -f "
     ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "chmod 600 /home/ubuntu/.ssh/experiment_key" \
         || { echo "❌ FATAL: could not chmod experiment key inside ${VM_NAME}"; exit 1; }
 
-    touch /local/.qdt_cloned
+    touch /local/.cad_cloned
 fi
 
 ################################################################################
@@ -575,11 +575,11 @@ fi
 # Preconditions
 #   – /local/.vm_setup_done exists   (the VM has been created and given a fixed IP)
 #   – /local/.k0s_in_vm_done does NOT exist  (k0s has not yet been installed inside the VM)
-#   – for the controller only, /local/.qdt_cloned must already exist (Step 5a)
+#   – for the controller only, /local/.cad_cloned must already exist (Step 5a)
 ################################################################################
 
 if [ -f "/local/.vm_setup_done" ] && [ -f "/local/.net_setup_done" ] && [ ! -f "/local/.k0s_in_vm_done" ] \
-    && ( [ "$INSTANCE_ID" -ne 0 ] || [ -f "/local/.qdt_cloned" ] ); then
+    && ( [ "$INSTANCE_ID" -ne 0 ] || [ -f "/local/.cad_cloned" ] ); then
     step_log "Installing k0s inside VM ${VM_NAME} (${INTERNAL_IP})"
 
     # 1. Copy the k0s helper scripts (and the shared retry helpers they source) into
@@ -629,7 +629,7 @@ fi
 if [ -f "/local/.k0s_in_vm_done" ] && [ ! -f "/local/.audo_deploy_setup" ] && [ "$INSTANCE_ID" -eq 0 ]; then
     step_log "Deploying the core and setting up the auto-deployment scripts"
 
-    # quick_deployment_tools + parallel are already set up by Step 5a, above,
+    # chronos-auto-deploy + parallel are already set up by Step 5a, above,
     # so that download_images.sh (run from inside master_install_k0.sh, as
     # part of Step 5) has them available before k0s is even installed.
 
