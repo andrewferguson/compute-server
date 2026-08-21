@@ -118,7 +118,13 @@ if [ -f /local/.tsc_skipped ]; then
     exit 0
 fi
 
-lsmod | grep -q '^custom_tsc' \
+# Read /proc/modules directly rather than `lsmod | grep -q`. This script runs
+# under `set -o pipefail`, and `grep -q` exits on its first match, closing the
+# pipe while lsmod is still writing -- lsmod then takes SIGPIPE and the pipeline
+# reports 141, so the check fails even though the module IS loaded. Whether that
+# happens depends on how much output remains unwritten when grep exits, which
+# makes it an intermittent false failure. No pipe, no race.
+grep -q '^custom_tsc ' /proc/modules \
     || fail "custom_tsc module is not loaded (guest TSC would not be dilated)"
 log "custom_tsc loaded ✓"
 
@@ -139,9 +145,12 @@ log "slot checker binary present ✓"
 : "${VERIFY_SLOTCHECKER_TIMEOUT:=60}"
 sc_deadline=$((SECONDS + VERIFY_SLOTCHECKER_TIMEOUT))
 while true; do
+    # Capture once and match against the string, for the same pipefail/SIGPIPE
+    # reason as the /proc/modules check above -- `ss | grep -q` is racy here.
+    ss_out=$(sudo ss -lnup 2>/dev/null || true)
     if systemctl is-active --quiet slotcheckerservice \
-       && sudo ss -lnup 2>/dev/null | grep -q ':8080\b' \
-       && sudo ss -lnup 2>/dev/null | grep -q ':4322\b'; then
+       && grep -q ':8080\b' <<<"$ss_out" \
+       && grep -q ':4322\b' <<<"$ss_out"; then
         break
     fi
     [ "$SECONDS" -lt "$sc_deadline" ] || fail \

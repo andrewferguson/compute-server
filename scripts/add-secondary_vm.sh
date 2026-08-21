@@ -40,9 +40,16 @@ done
 
 IFACE="enp1s0"
 
-# Extract the current IP address of the interface. head -1 because by this point
-# the interface carries .2 through .254.
-IP_ADDR=$(ip -4 addr show "$IFACE" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1)
+# Extract the current IP address of the interface, taking the first: by this
+# point the interface carries .2 through .254.
+#
+# Deliberately NOT piped into `head -1`. This script runs under `set -euo
+# pipefail`, and head exits after one line while grep is still emitting 253 --
+# grep then takes SIGPIPE, the pipeline reports 141, and set -e aborts the whole
+# script before the routes below are ever added. Trim the first line in the
+# shell instead, where nothing can close a pipe early.
+IP_ADDR=$(ip -4 addr show "$IFACE" | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+IP_ADDR=${IP_ADDR%%$'\n'*}
 
 # Check if IP was found
 if [[ -z "$IP_ADDR" ]]; then
