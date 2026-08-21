@@ -63,6 +63,31 @@ if [ -x "$K0S_BIN" ] \
     # EXPECTED_HOSTNAME is empty, which is the case for the inner-VM workers.
     ensure_expected_hostname
     sudo systemctl start k0sworker || true
+
+    # Safety net for nodes installed before --hostname-override existed, and for
+    # any other case where the kubelet came up under the wrong node name. When
+    # that happens the API server rejects it with "is not allowed to modify
+    # node" and it never renews its lease -- which the 50000s
+    # node-monitor-grace-period hides, leaving the node falsely Ready while pods
+    # scheduled onto it hang Pending forever.
+    #
+    # Deliberately CONDITIONAL. An unconditional restart would be actively
+    # harmful on a node that registered correctly and has since picked up a
+    # transient DHCP hostname: Global-SC ends up static=globalsc but
+    # transient=global-sc, and restarting there would re-register it under the
+    # wrong name and cause exactly the failure this is meant to prevent.
+    #
+    # Journal written to a file rather than piped into grep: this script runs
+    # under `set -o pipefail`, where `journalctl | grep -q` returns 141 when grep
+    # exits first and journalctl takes SIGPIPE.
+    k0s_boot_journal="$(mktemp)"
+    sudo journalctl -u k0sworker -b --no-pager >"${k0s_boot_journal}" 2>/dev/null || true
+    if grep -q "is not allowed to modify node" "${k0s_boot_journal}"; then
+        log "kubelet registered under the wrong node name; restarting now the hostname is settled"
+        sudo systemctl restart k0sworker || true
+    fi
+    rm -f "${k0s_boot_journal}"
+
     log "k0sworker is $(systemctl is-active k0sworker 2>&1)"
     exit 0
 fi
@@ -121,5 +146,24 @@ if [[ "$HOSTNAME" == "ins"* ]]; then
   LABEL_ARGS='--labels "dilated=true"'
 fi
 ensure_expected_hostname
-sudo k0s install worker --token-file  $HOME/token-file --kubelet-extra-args="--max-pods=243 --node-status-update-frequency=1s --resolv-conf=/run/systemd/resolve/resolv.conf" $LABEL_ARGS >>"$LOG_FILE"
+# --hostname-override pins the node name at install time, when the hostname is
+# known to be correct (ensure_expected_hostname ran just above, and for proxies
+# build_proxy.sh set it before calling us).
+#
+# Without it the kubelet takes its node name from the OS hostname *at every
+# start*, and on a reboot k0sworker starts from its persisted unit long before
+# the startup service renames the host -- so it tries to register under Emulab's
+# name (e.g. proxy0.chronos-agent.test5g-pg0.utah.cloudlab.us) while its client
+# certificate says system:node:proxy-0. The Node authorizer refuses, since a node
+# credential may only modify its own node object:
+#
+#   "Unable to register node with API server" err="nodes \"proxy0...\" is
+#    forbidden: node \"proxy-0\" is not allowed to modify node \"proxy0...\""
+#
+# The kubelet is then wedged forever: it never renews the proxy-0 lease, and
+# because k0s.yaml sets node-monitor-grace-period to 50000s (~14h) the node still
+# reads Ready. The scheduler places pods on it and they hang Pending indefinitely
+# -- observed as core-0 stuck Pending for 15 minutes with no events at all.
+NODE_NAME_OVERRIDE="$(hostname -s)"
+sudo k0s install worker --token-file  $HOME/token-file --kubelet-extra-args="--max-pods=243 --node-status-update-frequency=1s --resolv-conf=/run/systemd/resolve/resolv.conf --hostname-override=${NODE_NAME_OVERRIDE}" $LABEL_ARGS >>"$LOG_FILE"
 sudo k0s start
