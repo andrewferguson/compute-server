@@ -49,10 +49,31 @@ install_deps() {
 }
 
 install_k0s() {
+  # Skip the download when the correct version is already installed.
+  #
+  # get.k0s.sh writes IN PLACE to $K0S_BIN. If k0sworker is running, that is the
+  # binary it is executing, so the write fails with ETXTBSY ("Text file busy") --
+  # and because the call below is wrapped in retry_pipe it does not fail fast, it
+  # retries against RETRY_BUDGET_SECS. Observed on a real proxy power cycle:
+  # attempt 122 and climbing, an hour of spinning, then the node reported failed,
+  # while it was healthy and Ready in k8s the entire time.
+  #
+  # Compared without a pipe: this file runs under `set -o pipefail`, where
+  # `k0s version | grep -q` can return 141 when grep exits first and k0s takes
+  # SIGPIPE.
+  local installed=""
+  if [ -x "$K0S_BIN" ] || command -v k0s >/dev/null 2>&1; then
+    installed="$(k0s version 2>/dev/null || true)"
+    installed="${installed%%$'\n'*}"
+  fi
+  if [ "${installed}" = "${K0S_VERSION}" ]; then
+    log "k0s ${K0S_VERSION} already installed; skipping download"
+  else
   log "Installing k0s ($K0S_VERSION)"
   retry_pipe "install k0s binary" \
     "curl -sSLf --connect-timeout ${DOWNLOAD_CONNECT_TIMEOUT} --max-time ${DOWNLOAD_ATTEMPT_TIMEOUT} https://get.k0s.sh | sudo K0S_VERSION='${K0S_VERSION}' sh"
   command -v k0s >/dev/null 2>&1 || [ -x "$K0S_BIN" ] || _retry_die "k0s binary missing after install"
+  fi
   # Download and install the standard CNI plugins
   sudo mkdir -p /opt/cni/bin
   retry_pipe "download cni plugins" \

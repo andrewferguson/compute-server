@@ -37,12 +37,41 @@ ensure_expected_hostname() {
   echo "Hostname settled as $(hostname)"
 }
 
+delay=5                           # seconds to wait between tries
+
+# Installing and joining k0s is once-only work, but this script is invoked from
+# build_proxy.sh / build_globalsc.sh, which the CloudLab startup service re-runs
+# on EVERY boot. Re-running it cannot succeed and does not fail quickly:
+#
+#   install_k0s pipes upstream get.k0s.sh into sh, and that writes in place to
+#   /usr/local/bin/k0s -- the binary the running k0sworker is executing. The
+#   write fails with ETXTBSY ("Text file busy"), and because it is wrapped in
+#   retry_pipe it retries against RETRY_BUDGET_SECS (3600s). Observed on a real
+#   power cycle: attempt 122 and climbing, an hour of spinning, and the node
+#   finally reported failed -- while it was healthy and Ready in k8s the whole
+#   time, because the k0sworker unit persists and auto-starts on its own.
+#
+# Gate on real state rather than a marker file: k0s binary present, unit known
+# to systemd, and unit enabled.
+if [ -x "$K0S_BIN" ] \
+   && systemctl list-unit-files k0sworker.service >/dev/null 2>&1 \
+   && systemctl is-enabled --quiet k0sworker 2>/dev/null; then
+    log "k0s worker already installed and enabled; skipping install/join"
+    # Emulab resets the hostname on every boot (observed: proxy0 -> proxy-0), and
+    # for Global-SC this script is the only thing that pins it back to the name
+    # k0s registered under. Must still run even on the skip path. No-ops when
+    # EXPECTED_HOSTNAME is empty, which is the case for the inner-VM workers.
+    ensure_expected_hostname
+    sudo systemctl start k0sworker || true
+    log "k0sworker is $(systemctl is-active k0sworker 2>&1)"
+    exit 0
+fi
+
 install_deps
 install_k0s
 
 remote="ubuntu@10.2.1.2:~/token-file"
 target="$HOME/token-file"         # where we want it locally
-delay=5                           # seconds to wait between tries
 SCP_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 
 is_token_file_not_ready_error() {
