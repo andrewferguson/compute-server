@@ -25,8 +25,19 @@ fi
 
 echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward
 
-# Get the current hostname of the machine
+# Get the current hostname of the machine. Which block in nodes.json is "ours"
+# is decided by this, so if it does not name a block we would silently classify
+# every block as remote and write this node's own DNAT rules backwards. That is
+# exactly what happened when this ran at boot before the hostname was set:
+# `hostname -s` returned "localhost", giving 3 rules per pair for every block
+# (1518) instead of 2 for the local one (1265), with the local DNAT reversed.
+# Fail loudly instead; chronos-net.sh waits for the real hostname before calling us.
 current_hostname=$(hostname -s)
+if ! grep -qE "^${current_hostname}:" "$ip_conf"; then
+    echo "FATAL: hostname '${current_hostname}' does not match any node block in $ip_conf" >&2
+    echo "Refusing to write NAT rules that would reverse this node's own DNAT direction." >&2
+    exit 1
+fi
 
 # Dedicated chains make the NAT half of this script idempotent. Create them if
 # missing, flush them if they already exist, then make sure each is jumped to

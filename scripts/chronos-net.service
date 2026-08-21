@@ -8,11 +8,14 @@ Before=slotcheckerservice.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+# Long enough to cover the wrapper's own wait for the vlan interface and the
+# final hostname, which Emulab sets well after network-online.target.
+TimeoutStartSec=900
 # Runs the copies in /local/chronos/bin, NOT /local/repository/scripts: CloudLab
 # re-clones the repository on every boot, so it is not guaranteed to exist or be
-# complete at the point this unit fires.
-ExecStart=/local/chronos/bin/add-secondary.sh
-ExecStart=/local/chronos/bin/set_ip.sh
+# complete at the point this unit fires. The wrapper waits for preconditions and
+# then runs add-secondary.sh and set_ip.sh in order.
+ExecStart=/local/chronos/bin/chronos-net.sh
 
 [Install]
 WantedBy=multi-user.target

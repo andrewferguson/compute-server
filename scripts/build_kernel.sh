@@ -584,6 +584,7 @@ if [ -f "/local/.vm_setup_done" ] && [ ! -f "/local/.net_setup_done" ]; then
     sudo mkdir -p /local/chronos/bin /local/chronos/etc
     sudo install -m 0755 /local/repository/scripts/add-secondary.sh /local/chronos/bin/add-secondary.sh
     sudo install -m 0755 /local/repository/scripts/set_ip.sh        /local/chronos/bin/set_ip.sh
+    sudo install -m 0755 /local/repository/scripts/chronos-net.sh   /local/chronos/bin/chronos-net.sh
 
     step_log "Generating json"
     # Written outside the re-cloned repository so it survives a reboot. The
