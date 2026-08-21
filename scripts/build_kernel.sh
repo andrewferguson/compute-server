@@ -74,6 +74,17 @@ CPU_VENDOR=$(lscpu | grep "^Vendor ID:" | awk -F ' ' '{ print $3 }')
   touch /local/.kernel_done
   touch /local/.rebooted
   touch /local/.tsc_done
+  # Record *why* Step 2 was skipped, so later steps can tell "this node has no
+  # dilated-TSC support" apart from "Step 2 should have run and did not".
+  #
+  # This is the normal path for the controller: ManagerHardware is d6515, which
+  # is AMD EPYC, so node0 never builds the custom kernel, never loads
+  # custom_tsc, and therefore never gets /dev/shm/my-little-shared-memory. It
+  # does not need them -- values.yaml has dilateFirstNode: False and globalsc's
+  # component list starts at 10.1.2.1, so the controller is not a dilated
+  # component. Step 5 and verify_node.sh key off this marker instead of
+  # demanding artifacts that cannot exist here.
+  touch /local/.tsc_skipped
 }
 if [ ! -f "/local/.kernel_done" ]; then
     step_log "Installing kernel build dependencies"
@@ -706,17 +717,28 @@ if [ -f "/local/.vm_setup_done" ] && [ -f "/local/.net_setup_done" ] && [ ! -f "
         ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "bash $ROLE_SCRIPT" \
             || { echo "❌ FATAL: worker k0s install/join failed inside ${VM_NAME}"; exit 1; }
     fi
-    # The binary itself is built once in Step 2, into /local/chronos/bin. It used
-    # to be compiled here into /local/repository/scripts, which CloudLab re-clones
-    # on every boot -- so the enabled unit came back after a reboot with its
-    # ExecStart target deleted and crash-looped into 'failed'.
-    [ -x /local/chronos/bin/slotcheckerservice ] \
-        || { echo "❌ FATAL: /local/chronos/bin/slotcheckerservice missing (Step 2 did not complete)"; exit 1; }
-    sudo install -D -m 0644 /local/repository/scripts/slotcheckerservice.service \
-        /etc/systemd/system/slotcheckerservice.service
-    sudo systemctl daemon-reload
-    sudo systemctl enable slotcheckerservice
-    sudo systemctl start slotcheckerservice
+    # The slot checker is part of the dilated-TSC chain, so it only applies on a
+    # node that actually built it in Step 2. On a non-Intel node (the controller,
+    # ManagerHardware=d6515) Step 2 is skipped wholesale, and installing the unit
+    # there just leaves a service that can never start: it mmaps
+    # /dev/shm/my-little-shared-memory, which only custom_tsc creates. That is
+    # what used to happen -- node0 sat in 'failed' from provisioning onward and
+    # nothing ever reported it.
+    if [ -f "/local/.tsc_skipped" ]; then
+        step_log "Skipping slot checker install: no dilated-TSC support on this CPU"
+    else
+        # The binary itself is built once in Step 2, into /local/chronos/bin. It
+        # used to be compiled here into /local/repository/scripts, which CloudLab
+        # re-clones on every boot -- so the enabled unit came back after a reboot
+        # with its ExecStart target deleted and crash-looped into 'failed'.
+        [ -x /local/chronos/bin/slotcheckerservice ] \
+            || { echo "❌ FATAL: /local/chronos/bin/slotcheckerservice missing (Step 2 did not complete)"; exit 1; }
+        sudo install -D -m 0644 /local/repository/scripts/slotcheckerservice.service \
+            /etc/systemd/system/slotcheckerservice.service
+        sudo systemctl daemon-reload
+        sudo systemctl enable slotcheckerservice
+        sudo systemctl start slotcheckerservice
+    fi
 
     touch /local/.k0s_in_vm_done
 fi
