@@ -1,15 +1,27 @@
 #!/usr/bin/env bash
 #
 # add-secondary-ips.sh
-# Adds .3-.254/16 to whichever interface already has *.2/24.
-# Run with sudo.
+# Adds .3-.254/16 to whichever interface already has *.2/16, and adds the routes
+# this guest needs to reach the rest of the experiment.
+#
+# Runs on EVERY guest boot via chronos-guest-net.service, not just at provision:
+# guest addresses and routes are runtime-only and a VM restart discards them.
+# It must therefore be re-runnable, which is why the routes use `ip route
+# replace` (plain `add` fails with EEXIST, and under `set -e` that aborted the
+# script before the 10.3/10.4 routes were ever added).
 set -euo pipefail
 
-# 1. Discover the interface that owns *.2
-primary_if=$(ip -o -4 addr \
-               | awk '$4 ~ /\.2\/16$/ {print $2; exit}')
+# 1. Discover the interface that owns *.2, waiting for DHCP to finish. At boot
+#    this unit can start before the lease is granted; without the wait the
+#    script exits 1 and the guest comes up with no secondary addresses.
+primary_if=""
+for _ in $(seq 1 60); do
+  primary_if=$(ip -o -4 addr | awk '$4 ~ /\.2\/16$/ {print $2; exit}')
+  [[ -n $primary_if ]] && break
+  sleep 2
+done
 [[ -z $primary_if ]] && {
-  echo "Couldn’t find an interface with x.x.x.2/16" >&2
+  echo "Couldn't find an interface with x.x.x.2/16 after 120s" >&2
   exit 1
 }
 
@@ -28,8 +40,9 @@ done
 
 IFACE="enp1s0"
 
-# Extract the current IP address of the interface
-IP_ADDR=$(ip -4 addr show "$IFACE" | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+# Extract the current IP address of the interface. head -1 because by this point
+# the interface carries .2 through .254.
+IP_ADDR=$(ip -4 addr show "$IFACE" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1)
 
 # Check if IP was found
 if [[ -z "$IP_ADDR" ]]; then
@@ -47,5 +60,5 @@ GATEWAY="10.2.$o3.1"
 # the controller VM can SSH out to proxy-*/globalsc to distribute images.
 for DEST in "10.2.0.0/16" "10.3.0.0/16" "10.4.0.0/16"; do
   echo "Adding route to $DEST via $GATEWAY on $IFACE"
-  sudo ip route add "$DEST" via "$GATEWAY" dev "$IFACE"
+  ip route replace "$DEST" via "$GATEWAY" dev "$IFACE"
 done

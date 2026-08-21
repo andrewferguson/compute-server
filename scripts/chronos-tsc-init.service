@@ -1,0 +1,19 @@
+[Unit]
+Description=Chronos: load custom_tsc and initialise its shared-memory region
+Documentation=https://github.com/andrewferguson/compute-server
+After=systemd-modules-load.service
+Wants=systemd-modules-load.service
+# The inner VM must not be started before the dilated TSC is in place, or the
+# guest runs undilated while every health indicator still reads green.
+Before=libvirtd.service libvirt-guests.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# modprobe is a no-op if modules-load.d already loaded it; this makes the unit
+# self-sufficient if that failed. The module creates the shm region.
+ExecStartPre=/sbin/modprobe custom_tsc
+ExecStart=/local/chronos/bin/tsc-init
+
+[Install]
+WantedBy=multi-user.target

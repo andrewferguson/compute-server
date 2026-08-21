@@ -21,7 +21,16 @@
 set -euo pipefail
 
 nodes=${1:-1}               # how many node blocks to emit
-outfile=${2:-nodes.json}    # destination file
+# Destination file. Defaults to the persistent location rather than the CWD:
+# this used to land in /local/repository/scripts, which CloudLab re-clones on
+# every boot, so the map vanished and set_ip.sh silently produced no rules.
+outfile=${2:-${CHRONOS_NODES_JSON:-/local/chronos/etc/nodes.json}}
+
+mkdir -p "$(dirname "$outfile")"
+
+# Truncate first. Every write below appends, so without this a second run would
+# append a whole duplicate set of node blocks and corrupt the file for set_ip.sh.
+: > "$outfile"
 
 # open the root object
 

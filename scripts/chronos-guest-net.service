@@ -1,0 +1,13 @@
+[Unit]
+Description=Chronos: restore guest secondary IPs and inter-subnet routes
+Documentation=https://github.com/andrewferguson/compute-server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/home/ubuntu/add-secondary_vm.sh
+
+[Install]
+WantedBy=multi-user.target

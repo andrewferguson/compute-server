@@ -150,7 +150,11 @@ fi
 
 if [ -f "/local/.kernel_done" ] && [ -f "/local/.rebooted" ] && [ ! -f "/local/.tsc_done" ]; then
     step_log "After reboot: building and inserting fake_tsc module"
-    rm -f /local/.rebooted
+    # NOTE: /local/.rebooted is cleared at the END of this block, not here. It is
+    # this block's own entry condition, so clearing it up front meant a crash
+    # part-way through (the gNB build OOMs these nodes regularly) left the node
+    # unable to re-enter Step 2 *and* unable to reach Step 3 -- permanently stuck
+    # with neither marker set.
 
     cd "${USER_HOME}"
     if [ ! -d "fake_tsc" ]; then
@@ -172,25 +176,73 @@ if [ -f "/local/.kernel_done" ] && [ -f "/local/.rebooted" ] && [ ! -f "/local/.
     step_log "Building fake_tsc module"
     make
 
-    step_log "Unloading existing KVM modules (if any)"
-        sudo rmmod kvm_intel || true
-        sudo rmmod kvm || true
+    # Persistent home for everything the boot-time units execute. Deliberately
+    # NOT /local/repository, which CloudLab re-clones on every boot -- that is
+    # what deleted the compiled slot checker and nodes.json after every reboot.
+    sudo mkdir -p /local/chronos/bin /local/chronos/etc
 
+    step_log "Installing custom_tsc for automatic load at every boot"
+    # Kernel modules do not survive a reboot and the bare `insmod` here only ever
+    # ran on first provision. Install it where modprobe can find it by name and
+    # declare both the boot-time load and its ordering against KVM.
+    sudo install -D -m 0644 custom_tsc.ko "/lib/modules/$(uname -r)/extra/custom_tsc.ko"
+    sudo depmod -a
+    sudo install -D -m 0644 /local/repository/scripts/chronos-tsc.conf \
+        /etc/modules-load.d/chronos-tsc.conf
+    sudo install -D -m 0644 /local/repository/scripts/chronos-tsc-modprobe.conf \
+        /etc/modprobe.d/chronos-tsc.conf
 
-    step_log "Inserting custom_tsc.ko"
-    sudo insmod custom_tsc.ko
+    step_log "Loading custom_tsc ahead of KVM"
+    sudo rmmod kvm_intel || true
+    sudo rmmod kvm || true
+    lsmod | grep -q '^custom_tsc' || sudo modprobe custom_tsc
     sudo modprobe kvm
     sudo modprobe kvm_intel
-    sudo ./init
-    sudo ./init
-    step_log "Re-loading KVM modules"
+
+    # The module's init creates /dev/shm/my-little-shared-memory; tsc-init then
+    # writes its initial contents. Both are lost on reboot (tmpfs), which is why
+    # chronos-tsc-init.service re-runs this every boot.
+    step_log "Initialising the custom_tsc shared-memory region"
+    sudo install -m 0755 init /local/chronos/bin/tsc-init
+    sudo /local/chronos/bin/tsc-init
+
+    step_log "Installing chronos-tsc-init.service"
+    sudo install -D -m 0644 /local/repository/scripts/chronos-tsc-init.service \
+        /etc/systemd/system/chronos-tsc-init.service
+    sudo systemctl daemon-reload
+    sudo systemctl enable chronos-tsc-init.service
+
     apt_get_retry install -qq libsctp-dev lksctp-tools zlib1g-dev
     sudo modprobe sctp
     step_log "fake_tsc module inserted"
     sudo lsmod | grep custom_tsc || echo "⚠️ Warning: custom_tsc not in lsmod"
     sudo dmesg | tail -n 20
+
+    step_log "Building slotcheckerservice into /local/chronos/bin"
     cp /local/repository/scripts/slotcheckerservice.c ./
-    gcc slotcheckerservice.c -o slotcheckerservice 
+    # Build to a temp path then rename. mv within one filesystem is atomic, so an
+    # interrupted or failed compile can never leave a partial binary at the path
+    # the service executes.
+    if sudo gcc -pthread slotcheckerservice.c -o /local/chronos/bin/.slotcheckerservice.tmp; then
+        sudo mv -f /local/chronos/bin/.slotcheckerservice.tmp /local/chronos/bin/slotcheckerservice
+    else
+        sudo rm -f /local/chronos/bin/.slotcheckerservice.tmp
+        echo "❌ FATAL: slotcheckerservice build failed"; exit 1
+    fi
+    sudo install -m 0755 /local/repository/scripts/start_slotchecker.sh \
+        /local/chronos/bin/start_slotchecker.sh
+
+    # Guard on the artifacts, not merely on having reached the end of the block.
+    # This script deliberately runs without `set -e`, so without these checks a
+    # failed install or compile would still be recorded as a completed step.
+    [ -x /local/chronos/bin/tsc-init ] \
+        || { echo "❌ FATAL: tsc-init missing after Step 2"; exit 1; }
+    [ -x /local/chronos/bin/slotcheckerservice ] \
+        || { echo "❌ FATAL: slotcheckerservice missing after Step 2"; exit 1; }
+    [ -f "/lib/modules/$(uname -r)/extra/custom_tsc.ko" ] \
+        || { echo "❌ FATAL: custom_tsc.ko not installed into /lib/modules"; exit 1; }
+
+    rm -f /local/.rebooted
     touch /local/.tsc_done
 fi
 
@@ -480,6 +532,16 @@ sudo sed -i "/<vcpu placement='static'>51<\/vcpu>/r /dev/stdin" "$TMP_XML" <<<"$
 #    sudo service libvirtd restart
 #    sleep 5
 #    sudo virsh start "${VM_NAME}"
+
+    # The VM definition and its disk persist across a reboot, but libvirt will
+    # not start a domain that is not marked autostart -- so every reboot used to
+    # leave insNvm 'shut off' with nothing to bring it back. This one command is
+    # what moves "VM running" from an every-boot action to a once-only install.
+    step_log "Marking ${VM_NAME} to autostart at boot"
+    sudo virsh autostart "${VM_NAME}"
+    sudo virsh dominfo "${VM_NAME}" | grep -qE '^Autostart:[[:space:]]*enable' \
+        || { echo "❌ FATAL: could not enable autostart for ${VM_NAME}"; exit 1; }
+
     touch /local/.vm_setup_done
 fi
 #sudo virsh destroy "${VM_NAME}"
@@ -503,24 +565,59 @@ if [ -f "/local/.vm_setup_done" ] && [ ! -f "/local/.net_setup_done" ]; then
         sleep 1
     done
     cd  /local/repository/scripts
-    step_log "Adding ips"
-    sudo /local/repository/scripts/add-secondary.sh
-    sleep 5
+
+    # Copy the two scripts chronos-net.service executes into the persistent tree.
+    # They cannot be run from /local/repository at boot: CloudLab re-clones it on
+    # every boot, so it is not guaranteed to exist or be complete by the time a
+    # systemd unit fires.
+    sudo mkdir -p /local/chronos/bin /local/chronos/etc
+    sudo install -m 0755 /local/repository/scripts/add-secondary.sh /local/chronos/bin/add-secondary.sh
+    sudo install -m 0755 /local/repository/scripts/set_ip.sh        /local/chronos/bin/set_ip.sh
+
     step_log "Generating json"
-    sudo /local/repository/scripts/generate_config.sh  $MACHINE_NUM
+    # Written outside the re-cloned repository so it survives a reboot. The
+    # generator truncates, so this is safe to re-run.
+    sudo /local/repository/scripts/generate_config.sh "$MACHINE_NUM" /local/chronos/etc/nodes.json
+    [ -s /local/chronos/etc/nodes.json ] \
+        || { echo "❌ FATAL: nodes.json was not generated"; exit 1; }
+    sleep 5
+
+    step_log "Adding ips"
+    sudo /local/chronos/bin/add-secondary.sh
     sleep 5
     step_log "Adding IP TABLES"
-    sudo /local/repository/scripts/set_ip.sh
+    sudo /local/chronos/bin/set_ip.sh
     sleep 5
+
+    step_log "Installing chronos-net.service"
+    sudo install -D -m 0644 /local/repository/scripts/chronos-net.service \
+        /etc/systemd/system/chronos-net.service
+    sudo systemctl daemon-reload
+    sudo systemctl enable chronos-net.service
+
     step_log "Using the injected experiment key for guest bootstrap"
 
     step_log "Copying script to add ip address"
     scp $SSH_OPTS /local/repository/scripts/add-secondary_vm.sh ubuntu@${INTERNAL_IP}:~/ \
         || { echo "❌ FATAL: could not copy add-secondary_vm.sh into ${VM_NAME}"; exit 1; }
+    ssh $SSH_OPTS ubuntu@${INTERNAL_IP} "chmod +x /home/ubuntu/add-secondary_vm.sh" \
+        || { echo "❌ FATAL: could not chmod add-secondary_vm.sh inside ${VM_NAME}"; exit 1; }
     step_log "calling copied script"
 
     ssh $SSH_OPTS ubuntu@${INTERNAL_IP}  "sudo /home/ubuntu/add-secondary_vm.sh" \
         || { echo "❌ FATAL: could not run add-secondary_vm.sh inside ${VM_NAME}"; exit 1; }
+
+    # Guest addresses and routes are runtime-only too, and are lost whenever the
+    # VM restarts -- including a plain `virsh start` with no host reboot. Enable
+    # the equivalent unit inside the guest so it re-applies them itself.
+    step_log "Installing chronos-guest-net.service inside ${VM_NAME}"
+    scp $SSH_OPTS /local/repository/scripts/chronos-guest-net.service ubuntu@${INTERNAL_IP}:/tmp/ \
+        || { echo "❌ FATAL: could not copy chronos-guest-net.service into ${VM_NAME}"; exit 1; }
+    ssh $SSH_OPTS ubuntu@${INTERNAL_IP} \
+        "sudo install -D -m 0644 /tmp/chronos-guest-net.service /etc/systemd/system/chronos-guest-net.service \
+         && sudo systemctl daemon-reload && sudo systemctl enable chronos-guest-net.service" \
+        || { echo "❌ FATAL: could not enable chronos-guest-net.service inside ${VM_NAME}"; exit 1; }
+
     touch /local/.net_setup_done
 fi
 
@@ -609,8 +706,14 @@ if [ -f "/local/.vm_setup_done" ] && [ -f "/local/.net_setup_done" ] && [ ! -f "
         ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" "bash $ROLE_SCRIPT" \
             || { echo "❌ FATAL: worker k0s install/join failed inside ${VM_NAME}"; exit 1; }
     fi
-    sudo gcc -pthread slotcheckerservice.c -o slotcheckerservice
-    sudo cp /local/repository/scripts/slotcheckerservice.service /etc/systemd/system/slotcheckerservice.service
+    # The binary itself is built once in Step 2, into /local/chronos/bin. It used
+    # to be compiled here into /local/repository/scripts, which CloudLab re-clones
+    # on every boot -- so the enabled unit came back after a reboot with its
+    # ExecStart target deleted and crash-looped into 'failed'.
+    [ -x /local/chronos/bin/slotcheckerservice ] \
+        || { echo "❌ FATAL: /local/chronos/bin/slotcheckerservice missing (Step 2 did not complete)"; exit 1; }
+    sudo install -D -m 0644 /local/repository/scripts/slotcheckerservice.service \
+        /etc/systemd/system/slotcheckerservice.service
     sudo systemctl daemon-reload
     sudo systemctl enable slotcheckerservice
     sudo systemctl start slotcheckerservice

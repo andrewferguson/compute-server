@@ -1,12 +1,19 @@
 [Unit]
 Description=Slot Checker Service
-After=network.target
+After=network.target chronos-tsc-init.service
+# Hard dependency: the checker mmaps /dev/shm/my-little-shared-memory, which is
+# created by custom_tsc's module_init. Without this it starts anyway, fails with
+# "stat file: No such file or directory", and crash-loops into 'failed'.
+Requires=chronos-tsc-init.service
 
 [Service]
-ExecStart=/local/repository/scripts/start_slotchecker.sh
+# /local/chronos/bin, not /local/repository/scripts: the repository is re-cloned
+# by CloudLab on every boot, which deleted the compiled binary this unit runs.
+ExecStart=/local/chronos/bin/start_slotchecker.sh
 Restart=always
-User=uzzu
-WorkingDirectory=/local/repository/scripts
+RestartSec=5
+User=root
+WorkingDirectory=/local/chronos/bin
 
 [Install]
 WantedBy=multi-user.target

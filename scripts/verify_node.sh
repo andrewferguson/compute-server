@@ -99,4 +99,43 @@ else
 fi
 log "controller reports ${NODE_NAME} Ready ✓"
 
-echo "✅ verify OK: ${VM_NAME} is running and Ready in the k0s cluster"
+# 5. The Chronos runtime chain on the OUTER node. k0s Ready is not sufficient:
+#    every check above passes on a node whose custom_tsc module is unloaded and
+#    whose slot checker is dead, and such a node reports healthy while being
+#    unable to take part in an experiment at all. globalsc reaches this node's
+#    checker on the outer IP 10.1.$((INSTANCE_ID + 2)).1, so a silent failure
+#    here surfaces only as "Still waiting for components" much later.
+lsmod | grep -q '^custom_tsc' \
+    || fail "custom_tsc module is not loaded (guest TSC would not be dilated)"
+log "custom_tsc loaded ✓"
+
+SHM=/dev/shm/my-little-shared-memory
+[ -e "$SHM" ] || fail "$SHM missing (custom_tsc did not create its shared-memory region)"
+SHM_SIZE=$(stat -c %s "$SHM" 2>/dev/null || echo 0)
+[ "$SHM_SIZE" -eq 10000 ] || fail "$SHM is ${SHM_SIZE} bytes, expected 10000"
+log "shared-memory region present ✓"
+
+[ -x /local/chronos/bin/slotcheckerservice ] \
+    || fail "/local/chronos/bin/slotcheckerservice missing or not executable"
+log "slot checker binary present ✓"
+
+# Bounded wait rather than an instant assertion: this script runs as the startup
+# service immediately after build_kernel.sh starts the unit, so the process may
+# not have bound its sockets yet. Without the wait this check is racy and fails
+# provisioning on a node that is actually fine.
+: "${VERIFY_SLOTCHECKER_TIMEOUT:=60}"
+sc_deadline=$((SECONDS + VERIFY_SLOTCHECKER_TIMEOUT))
+while true; do
+    if systemctl is-active --quiet slotcheckerservice \
+       && sudo ss -lnup 2>/dev/null | grep -q ':8080\b' \
+       && sudo ss -lnup 2>/dev/null | grep -q ':4322\b'; then
+        break
+    fi
+    [ "$SECONDS" -lt "$sc_deadline" ] || fail \
+        "slotcheckerservice did not become active and bound to UDP 8080/4322 within ${VERIFY_SLOTCHECKER_TIMEOUT}s (state: $(systemctl is-active slotcheckerservice 2>&1))"
+    sleep 3
+done
+log "slotcheckerservice active and listening on UDP 8080 and 4322 ✓"
+
+echo "✅ verify OK: ${VM_NAME} is running and Ready in the k0s cluster,"
+echo "   and this node's Chronos runtime chain (custom_tsc → shm → slot checker) is up"

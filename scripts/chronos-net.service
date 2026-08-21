@@ -1,0 +1,18 @@
+[Unit]
+Description=Chronos: restore host secondary IPs and NAT rules
+Documentation=https://github.com/andrewferguson/compute-server
+After=network-online.target
+Wants=network-online.target
+Before=slotcheckerservice.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Runs the copies in /local/chronos/bin, NOT /local/repository/scripts: CloudLab
+# re-clones the repository on every boot, so it is not guaranteed to exist or be
+# complete at the point this unit fires.
+ExecStart=/local/chronos/bin/add-secondary.sh
+ExecStart=/local/chronos/bin/set_ip.sh
+
+[Install]
+WantedBy=multi-user.target
