@@ -31,6 +31,8 @@ GITHUB_USERNAME="$2"
 MACHINE_NUM="$3"
 INSTANCE_ID="$4"
 MACHINE_PNUM="$5"
+NUM_GNB="$6"
+NUM_UE="$7"
 
 step_log "Number of arguments: $#"
 step_log "GitHub token: $GITHUB_TOKEN"
@@ -38,6 +40,8 @@ step_log "GitHub username: $GITHUB_USERNAME"
 step_log "Number of Machines: $MACHINE_NUM"
 step_log "Number of Proxy Machines: $MACHINE_PNUM"
 step_log "Instance ID: $INSTANCE_ID"
+step_log "Number of gNB: $NUM_GNB"
+step_log "Number of UE: $NUM_UE"
 
 # Shared lock-tolerant / retrying apt + download wrappers. These hard-fail loudly on
 # exhaustion of their per-occurrence budget, which (since this script has no `set -e`)
@@ -666,7 +670,7 @@ if [ -f "/local/.vm_setup_done" ] && [ -f "/local/.net_setup_done" ] && [ ! -f "
 
     step_log "Syncing values.yaml node counts to this experiment's real topology"
     ssh $SSH_OPTS ubuntu@"${INTERNAL_IP}" \
-        "sed -i'' -E 's/^(numberGNBNodes:)[[:space:]]*[0-9]+/\1 $((MACHINE_NUM - 1))/' /home/ubuntu/chronos-auto-deploy/values.yaml && sed -i'' -E 's/^(numberProxyNodes:)[[:space:]]*[0-9]+/\1 ${MACHINE_PNUM}/' /home/ubuntu/chronos-auto-deploy/values.yaml" \
+        "sed -i'' -E 's/^(numberGNBNodes:)[[:space:]]*[0-9]+/\1 $((MACHINE_NUM - 1))/' /home/ubuntu/chronos-auto-deploy/values.yaml && sed -i'' -E 's/^(numberProxyNodes:)[[:space:]]*[0-9]+/\1 ${MACHINE_PNUM}/' /home/ubuntu/chronos-auto-deploy/values.yaml && sed -i'' -E 's/^(numberGNB:)[[:space:]]*[0-9]+/\1 ${NUM_GNB}/' /home/ubuntu/chronos-auto-deploy/values.yaml && sed -i'' -E 's/^(numberUE:)[[:space:]]*[0-9]+/\1 ${NUM_UE}/' /home/ubuntu/chronos-auto-deploy/values.yaml" \
         || { echo "❌ FATAL: could not patch values.yaml node counts inside ${VM_NAME}"; exit 1; }
 
     step_log "Copying the shared experiment SSH key into the controller VM"

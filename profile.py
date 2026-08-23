@@ -26,6 +26,8 @@ COMP_MANAGER_ID = "urn:publicid:IDN+emulab.net+authority+cm"
 # Profile parameters.
 pc.defineParameter("machineNum", "Number of gNB / UE Nodes", portal.ParameterType.INTEGER, 1)
 pc.defineParameter("machinePNum", "Number of Proxy Nodes", portal.ParameterType.INTEGER, 1)
+pc.defineParameter("numGNB", "Number of gNB", portal.ParameterType.INTEGER, 1)
+pc.defineParameter("numUE", "Number of UE", portal.ParameterType.INTEGER, 1)
 pc.defineParameter("Hardware", "Outer Node Hardware", portal.ParameterType.NODETYPE,"pc")
 pc.defineParameter("ProxyHardware", "Proxy Machine Hardware", portal.ParameterType.NODETYPE,"pc")
 pc.defineParameter("ManagerHardware", "k8s Controller Hardware", portal.ParameterType.NODETYPE,"pc")
@@ -87,12 +89,14 @@ for i in range(0,params.machineNum+1):
     node = rspec.RawPC("node" + str(i))
     node.disk_image = os
     node.addService(PG.Execute(shell="bash", command=profileConfigs + "/local/repository/scripts/configure.sh"))
-    command = "/local/repository/scripts/build_kernel.sh {} {} {} {} {}".format(
+    command = "/local/repository/scripts/build_kernel.sh {} {} {} {} {} {} {}".format(
     params.token,           # $1 = token
     params.githubUser,      # $2 = GitHub username
     params.machineNum+1,    # $3 = machine number
     i,                      # $4 = instance index
-    params.machinePNum)     # $5 = proxy node count
+    params.machinePNum,     # $5 = proxy node count
+    params.numGNB,          # $6 = number of gNB
+    params.numUE)           # $7 = number of UE
     node.addService(PG.Execute(shell="bash", command=command))
     # Fail-loud verification that this node's inner VM was created and joined k0s.
     node.addService(PG.Execute(shell="bash", command="/local/repository/scripts/verify_node.sh {}".format(i)))
