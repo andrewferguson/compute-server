@@ -63,9 +63,14 @@ pc.defineParameter(
     longDescription="Hosts gNB/UE pods and the custom kernel build.")
 
 pc.defineParameter(
-    "ProxyHardware", "Proxy / Global-SC Node Hardware Type",
+    "ProxyHardware", "Proxy Node Hardware Type",
     portal.ParameterType.NODETYPE, "pc",
-    longDescription="Used for both proxy nodes and the Global-SC node.")
+    longDescription="Hosts the Chronos proxy component.")
+
+pc.defineParameter(
+    "GlobalSCHardware", "Global-SC Node Hardware Type",
+    portal.ParameterType.NODETYPE, "pc",
+    longDescription="Runs the single Global-SC node.")
 
 pc.defineParameter(
     "ManagerHardware", "k8s Controller Hardware Type",
@@ -166,7 +171,7 @@ node.disk_image = os
 node.addService(PG.Execute(shell="bash", command=profileConfigs + "/local/repository/scripts/configure.sh"))
 command="/local/repository/scripts/build_globalsc.sh {}".format(params.machineNum+1)
 node.addService(PG.Execute(shell="bash", command=command))
-node.hardware_type = params.ProxyHardware
+node.hardware_type = params.GlobalSCHardware
 iface = node.addInterface()
 iface.addAddress(PG.IPv4Address("10.4.1.1", netmask))
 network.addInterface(iface)
