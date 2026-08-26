@@ -2,11 +2,19 @@
 
 kube_description= \
     """
-    Development Cluster with USRP
+    Chronos: large-scale UE/gNB emulation testbed for 5G RAN research.
+    Provisions a k8s cluster (1 controller + N workers, custom time-dilation
+    kernel) plus proxy and Global-SC nodes, then deploys the Chronos control
+    plane. Kernel build makes first boot slow.
     """
 kube_instruction= \
     """
-    Author: Jon Larrea and Ujjwal Pawar
+    ## Once ready
+
+    1. SSH to node0 (k8s controller, ins0vm).
+    2. Run `chronos-auto-deploy/run-experiment.sh` to deploy the five
+       Chronos components (globalsc, core, proxy, gnb, ue).
+    3. Run `chronos-auto-deploy/teardown-experiment.sh` when done.
     """
 
 
@@ -24,24 +32,72 @@ rspec = PG.Request()
 COMP_MANAGER_ID = "urn:publicid:IDN+emulab.net+authority+cm"
 
 # Profile parameters.
-pc.defineParameter("machineNum", "Number of gNB / UE Nodes", portal.ParameterType.INTEGER, 1)
-pc.defineParameter("machinePNum", "Number of Proxy Nodes", portal.ParameterType.INTEGER, 1)
-pc.defineParameter("numGNB", "Number of gNB", portal.ParameterType.INTEGER, 1)
-pc.defineParameter("numUE", "Number of UE", portal.ParameterType.INTEGER, 1)
-pc.defineParameter("Hardware", "Outer Node Hardware", portal.ParameterType.NODETYPE,"pc")
-pc.defineParameter("ProxyHardware", "Proxy Machine Hardware", portal.ParameterType.NODETYPE,"pc")
-pc.defineParameter("ManagerHardware", "k8s Controller Hardware", portal.ParameterType.NODETYPE,"pc")
-pc.defineParameter("OS", "Operating System", portal.ParameterType.STRING,"ubuntu22",[("ubuntu18","ubuntu18"),("ubuntu20","ubuntu20"), ("ubuntu22", "ubuntu22")])
+pc.defineParameter(
+    "machineNum", "Number of gNB / UE Worker Nodes",
+    portal.ParameterType.INTEGER, 1,
+    longDescription="Worker node count, separate from the k8s controller (node0). "
+        "Each worker holds up to 200 gNB/UE pods combined, so numGNB + numUE "
+        "must not exceed 200 x this value.")
+
+pc.defineParameter(
+    "machinePNum", "Number of Proxy Nodes",
+    portal.ParameterType.INTEGER, 1,
+    longDescription="Runs the Chronos proxy component. Separate from the worker "
+        "nodes above and from the single Global-SC node.")
+
+pc.defineParameter(
+    "numGNB", "Number of gNB",
+    portal.ParameterType.INTEGER, 1,
+    longDescription="Emulated gNB pods, spread across worker nodes. Must be >= 1. "
+        "numGNB + numUE <= 200 x machineNum.")
+
+pc.defineParameter(
+    "numUE", "Number of UE",
+    portal.ParameterType.INTEGER, 1,
+    longDescription="Emulated UE pods, split evenly across gNBs. "
+        "numGNB + numUE <= 200 x machineNum.")
+
+pc.defineParameter(
+    "Hardware", "Worker Node Hardware Type",
+    portal.ParameterType.NODETYPE, "pc",
+    longDescription="Hosts gNB/UE pods and the custom kernel build.")
+
+pc.defineParameter(
+    "ProxyHardware", "Proxy / Global-SC Node Hardware Type",
+    portal.ParameterType.NODETYPE, "pc",
+    longDescription="Used for both proxy nodes and the Global-SC node.")
+
+pc.defineParameter(
+    "ManagerHardware", "k8s Controller Hardware Type",
+    portal.ParameterType.NODETYPE, "pc",
+    longDescription="Runs node0 / ins0vm, the k8s controller every other node joins.")
+
+pc.defineParameter(
+    "OS", "Operating System", portal.ParameterType.STRING, "ubuntu22",
+    [("ubuntu18", "ubuntu18"), ("ubuntu20", "ubuntu20"), ("ubuntu22", "ubuntu22")],
+    longDescription="Base image for every node. ubuntu22 is the tested default.")
 
 #GitHub parameters
 pc.defineParameter("githubUser","GitHub Username",
-                   portal.ParameterType.STRING,"")
+                   portal.ParameterType.STRING,"",groupId="github")
 pc.defineParameter("token", "GitHub Token",
-                   portal.ParameterType.STRING, "")
+                   portal.ParameterType.STRING, "",groupId="github")
+pc.defineParameterGroup("github", "GitHub Access (optional)")
 
 
 
 params = pc.bindParameters()
+
+if params.numGNB < 1:
+    pc.reportError(portal.ParameterError(
+        "Number of gNB must be at least 1.", ["numGNB"]))
+
+if params.numGNB + params.numUE > 200 * params.machineNum:
+    pc.reportError(portal.ParameterError(
+        "Number of gNB + Number of UE ({}) exceeds the per-node pod budget "
+        "of 200 x Number of Worker Nodes ({}).".format(
+            params.numGNB + params.numUE, 200 * params.machineNum),
+        ["numGNB", "numUE", "machineNum"]))
 
 #
 # Give the library a chance to return nice JSON-formatted exception(s) and/or
